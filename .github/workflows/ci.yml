@@ -21,10 +21,10 @@ jobs:
     name: Lint & análise estática
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with: { persist-credentials: false }
 
-      - uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: ${{ env.PHP_VERSION }}
           extensions: intl, pdo_pgsql, bcmath, zip
@@ -32,7 +32,7 @@ jobs:
           tools: composer:v2
 
       - name: Cache Composer
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: vendor
           key: composer-${{ hashFiles('composer.lock') }}
@@ -63,10 +63,10 @@ jobs:
       DB_HOST: 127.0.0.1
       DB_DATABASE: oficina_test
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with: { persist-credentials: false }
 
-      - uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: ${{ env.PHP_VERSION }}
           extensions: intl, pdo_pgsql, bcmath, zip
@@ -88,7 +88,7 @@ jobs:
 
       - name: Publicar relatório de cobertura
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-report
           path: coverage/
@@ -98,14 +98,14 @@ jobs:
     name: Análise de vulnerabilidades
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with: { persist-credentials: false }
 
       # ⚠️ SUPPLY CHAIN: em mar/2026 as tags do trivy-action foram sequestradas
       # (CVE-2026-33634). Fixe SEMPRE por SHA de commit, nunca por tag.
       # Rode ./scripts/pin-actions.sh após o bootstrap para trocar a tag pelo SHA.
       - name: Trivy (dependências, segredos e misconfig)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -117,7 +117,7 @@ jobs:
           exit-code: "0"
 
       - name: Gate (falha só em CRITICAL)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -129,7 +129,7 @@ jobs:
 
       - name: Publicar relatório de vulnerabilidades
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: security-report
           path: security-report.txt
