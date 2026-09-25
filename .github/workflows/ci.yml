@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+# Menor privilégio por padrão
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PHP_VERSION: "8.4"
+
+jobs:
+  quality:
+    name: Lint & análise estática
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: intl, pdo_pgsql, bcmath, zip
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Code style (Pint)
+        run: ./vendor/bin/pint --test
+      - name: Análise estática (Larastan)
+        run: ./vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+      - name: Vulnerabilidades em dependências (composer audit)
+        run: composer audit --format=plain
+
+  tests:
+    name: Testes & cobertura
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: oficina_test
+          POSTGRES_USER: oficina
+          POSTGRES_PASSWORD: oficina
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U oficina -d oficina_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DB_HOST: 127.0.0.1
+      DB_DATABASE: oficina_test
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: intl, pdo_pgsql, bcmath, zip
+          coverage: pcov
+          tools: composer:v2
+
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Preparar ambiente
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan jwt:secret --force || true
+
+      - name: Testes com gate de cobertura (mín. 80%)
+        run: >
+          php artisan test --coverage --min=80
+          --coverage-clover=coverage/clover.xml
+          --coverage-html=coverage/html
+
+      - name: Publicar relatório de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 30
+
+  security:
+    name: Análise de vulnerabilidades
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+
+      # ⚠️ SUPPLY CHAIN: em mar/2026 as tags do trivy-action foram sequestradas
+      # (CVE-2026-33634). Fixe SEMPRE por SHA de commit, nunca por tag.
+      # Rode ./scripts/pin-actions.sh após o bootstrap para trocar a tag pelo SHA.
+      - name: Trivy (dependências, segredos e misconfig)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: CRITICAL,HIGH,MEDIUM
+          ignore-unfixed: true
+          format: table
+          output: security-report.txt
+          exit-code: "0"
+
+      - name: Gate (falha só em CRITICAL)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          skip-setup-trivy: true
+
+      - name: Publicar relatório de vulnerabilidades
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: security-report.txt
+          retention-days: 90

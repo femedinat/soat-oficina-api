@@ -1,0 +1,4 @@
+# Troque pelos usernames do grupo. Todo PR pede review automático destes donos.
+* @SEU_USUARIO_GITHUB
+/.github/ @SEU_USUARIO_GITHUB
+/docker/  @SEU_USUARIO_GITHUB
