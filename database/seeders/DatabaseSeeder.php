@@ -17,11 +17,17 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        // Administrador de demonstração: SOMENTE ambiente local/testes. A senha vem do .env.
+        if (app()->environment('production')) {
+            return;
+        }
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        User::query()->updateOrCreate(
+            ['email' => 'admin@oficina.local'],
+            [
+                'name' => 'Administrador',
+                'password' => (string) config('app.admin_seed_password'),
+            ],
+        );
     }
 }
