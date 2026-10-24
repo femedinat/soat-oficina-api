@@ -7,6 +7,8 @@ namespace Database\Seeders;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Oficina\Identity\Domain\Role;
+use RuntimeException;
 
 class DatabaseSeeder extends Seeder
 {
@@ -17,11 +19,23 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        // Administrador de demonstração: SOMENTE ambiente local/testes. A senha vem do .env.
+        if (app()->environment('production')) {
+            return;
+        }
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        $password = (string) config('app.admin_seed_password');
+        if ($password === '') {
+            throw new RuntimeException('A variável ADMIN_SEED_PASSWORD deve ser informada no .env para executar o seeder.');
+        }
+
+        User::query()->updateOrCreate(
+            ['email' => 'admin@oficina.local'],
+            [
+                'name' => 'Administrador',
+                'password' => $password,
+                'role' => Role::ADMINISTRATOR,
+            ],
+        );
     }
 }
