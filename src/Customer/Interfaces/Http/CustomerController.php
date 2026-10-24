@@ -16,7 +16,7 @@ use Oficina\Customer\Application\RegisterCustomer;
 use Oficina\Customer\Application\UpdateCustomer;
 
 /**
- * CRUD de clientes (protegido por JWT). Sem regra de negócio: apenas traduz HTTP <-> casos de uso.
+ * CRUD de clientes (protegido por JWT e restrito a administradores). Sem regra de negócio: apenas traduz HTTP <-> casos de uso.
  * Erros de domínio são convertidos em 404/409/422 em bootstrap/app.php.
  *
  * @tags Clientes
@@ -26,18 +26,23 @@ final class CustomerController extends Controller
     /**
      * Listar clientes
      *
-     * Paginado, ordenado por nome. `per_page` máximo: 100.
+     * Paginado, ordenado por nome. Suporta filtro por CPF/CNPJ (`document`). `per_page` máximo: 100.
      *
      * @response array{data: list<array{id: string, name: string, document_type: string, document: string, email: string, phone: string|null}>, meta: array{page: int, per_page: int, total: int, last_page: int}}
      */
     public function index(Request $request, ListCustomers $listCustomers): JsonResponse
     {
         $validated = $request->validate([
+            'document' => ['sometimes', 'string'],
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:'.ListCustomers::MAX_PER_PAGE],
         ]);
 
-        $result = $listCustomers->execute((int) ($validated['page'] ?? 1), (int) ($validated['per_page'] ?? 15));
+        $result = $listCustomers->execute(
+            (int) ($validated['page'] ?? 1),
+            (int) ($validated['per_page'] ?? 15),
+            isset($validated['document']) ? (string) $validated['document'] : null,
+        );
 
         return response()->json([
             'data' => array_map(

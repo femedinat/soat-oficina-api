@@ -130,7 +130,7 @@ final class UserApiTest extends TestCase
         $customer = $this->customer();
         $this->postJson('/api/users', $this->payload(['role' => 'customer', 'customer_id' => $customer->id]), $this->headersFor(Role::ADMINISTRATOR))->assertCreated();
 
-        $customer->delete();
+        $customer->forceDelete();
 
         $this->assertDatabaseMissing('users', ['email' => 'joao@oficina.local']);
     }
