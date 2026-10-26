@@ -126,6 +126,6 @@ return [
     ],
 
     // Senha do administrador de demonstração criado pelo seeder (ambientes não-produtivos).
-    'admin_seed_password' => env('ADMIN_SEED_PASSWORD', 'admin-local-123'),
+    'admin_seed_password' => env('ADMIN_SEED_PASSWORD'),
 
 ];

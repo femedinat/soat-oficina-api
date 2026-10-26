@@ -12,12 +12,21 @@ Route::prefix('auth')->group(function (): void {
 
     Route::middleware('auth:api')->group(function (): void {
         Route::get('me', [AuthController::class, 'me']);
+        Route::post('refresh', [AuthController::class, 'refresh']);
         Route::post('logout', [AuthController::class, 'logout']);
     });
 });
 
 Route::middleware('auth:api')->group(function (): void {
-    Route::apiResource('customers', CustomerController::class)->parameters(['customers' => 'customer']);
+    Route::apiResource('customers', CustomerController::class)
+        ->only(['index', 'show'])
+        ->middleware('role:administrator,mechanic')
+        ->parameters(['customers' => 'customer']);
+
+    Route::apiResource('customers', CustomerController::class)
+        ->only(['store', 'update', 'destroy'])
+        ->middleware('role:administrator')
+        ->parameters(['customers' => 'customer']);
 
     Route::post('users', [UserController::class, 'store'])->middleware('role:administrator');
 });

@@ -65,12 +65,12 @@ CHECK constraints e integridade referencial. Decisão completa: [ADR 0001](docs/
 ## Autenticação e usuários de demonstração
 | Perfil | E-mail | Senha |
 |---|---|---|
-| Admin | `admin@oficina.local` | _definida no seeder — apenas ambiente local_ |
+| Administrador | `admin@oficina.local` | `admin-local-123` (configurada via `ADMIN_SEED_PASSWORD` no `.env`) |
 
 ```bash
 curl -X POST http://localhost:8080/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"admin@oficina.local","password":"..."}'
+  -d '{"email":"admin@oficina.local","password":"admin-local-123"}'
 # use o token retornado: Authorization: Bearer <token>
 ```
 Endpoints de consulta do cliente (acompanhamento da OS) _(definir estratégia: código da OS + documento)_.
