@@ -8,15 +8,18 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Oficina\Customer\Application\ActivateCustomer;
 use Oficina\Customer\Application\CustomerView;
-use Oficina\Customer\Application\DeleteCustomer;
+use Oficina\Customer\Application\DeactivateCustomer;
 use Oficina\Customer\Application\FindCustomer;
+use Oficina\Customer\Application\FindCustomerByDocument;
 use Oficina\Customer\Application\ListCustomers;
 use Oficina\Customer\Application\RegisterCustomer;
 use Oficina\Customer\Application\UpdateCustomer;
+use Oficina\Customer\Application\UpdateCustomerContact;
 
 /**
- * CRUD de clientes (protegido por JWT). Sem regra de negócio: apenas traduz HTTP <-> casos de uso.
+ * Ciclo de vida completo de clientes (protegido por JWT). Sem regra de negócio: apenas traduz HTTP <-> casos de uso.
  * Erros de domínio são convertidos em 404/409/422 em bootstrap/app.php.
  *
  * @tags Clientes
@@ -26,9 +29,9 @@ final class CustomerController extends Controller
     /**
      * Listar clientes
      *
-     * Paginado, ordenado por nome. `per_page` máximo: 100.
+     * Paginado, ordenado por nome, com filtro opcional de status (`only_active`). `per_page` máximo: 100.
      *
-     * @response array{data: list<array{id: string, name: string, document_type: string, document: string, email: string, phone: string|null}>, meta: array{page: int, per_page: int, total: int, last_page: int}}
+     * @response array{data: list<array{id: string, name: string, document_type: string, document: string, email: string, phone: string|null, active: bool}>, meta: array{page: int, per_page: int, total: int, last_page: int}}
      */
     public function index(Request $request, ListCustomers $listCustomers): JsonResponse
     {
@@ -37,7 +40,15 @@ final class CustomerController extends Controller
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:'.ListCustomers::MAX_PER_PAGE],
         ]);
 
-        $result = $listCustomers->execute((int) ($validated['page'] ?? 1), (int) ($validated['per_page'] ?? 15));
+        $onlyActive = $request->filled('only_active')
+            ? $request->boolean('only_active')
+            : null;
+
+        $result = $listCustomers->execute(
+            (int) ($validated['page'] ?? 1),
+            (int) ($validated['per_page'] ?? 15),
+            $onlyActive,
+        );
 
         return response()->json([
             'data' => array_map(
@@ -67,7 +78,7 @@ final class CustomerController extends Controller
     }
 
     /**
-     * Consultar cliente
+     * Consultar cliente por ID
      *
      * Retorna 404 se não existir.
      */
@@ -77,10 +88,20 @@ final class CustomerController extends Controller
     }
 
     /**
-     * Atualizar cliente
+     * Consultar cliente por CPF/CNPJ
      *
-     * Substitui todos os dados do cliente. Retorna 404 se não existir e 409 se o documento
-     * pertencer a outro cliente.
+     * Retorna 404 se não existir e 422 se o documento informado for inválido.
+     */
+    public function showByDocument(string $document, FindCustomerByDocument $findCustomerByDocument): CustomerResource
+    {
+        return new CustomerResource($findCustomerByDocument->execute($document));
+    }
+
+    /**
+     * Atualizar dados do cliente
+     *
+     * Substitui todos os dados do cliente. Retorna 404 se não existir, 409 se o documento
+     * pertencer a outro cliente e 422 se o cliente estiver inativo.
      */
     public function update(string $customer, CustomerRequest $request, UpdateCustomer $updateCustomer): CustomerResource
     {
@@ -88,13 +109,36 @@ final class CustomerController extends Controller
     }
 
     /**
-     * Excluir cliente
+     * Atualizar contato do cliente (telefone e e-mail)
      *
-     * Retorna 404 se não existir.
+     * Atualiza apenas o contato do cliente e dispara confirmação de atualização por e-mail.
      */
-    public function destroy(string $customer, DeleteCustomer $deleteCustomer): Response
+    public function updateContact(
+        string $customer,
+        UpdateCustomerContactRequest $request,
+        UpdateCustomerContact $updateCustomerContact,
+    ): CustomerResource {
+        return new CustomerResource($updateCustomerContact->execute($customer, $request->toInput()));
+    }
+
+    /**
+     * Reativar cliente
+     *
+     * Reativa um cliente previamente inativado.
+     */
+    public function activate(string $customer, ActivateCustomer $activateCustomer): CustomerResource
     {
-        $deleteCustomer->execute($customer);
+        return new CustomerResource($activateCustomer->execute($customer));
+    }
+
+    /**
+     * Inativar cliente
+     *
+     * Realiza a inativação lógica do cliente, preservando e arquivando o histórico de serviços e veículos.
+     */
+    public function destroy(string $customer, DeactivateCustomer $deactivateCustomer): Response
+    {
+        $deactivateCustomer->execute($customer);
 
         return response()->noContent();
     }

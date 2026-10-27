@@ -18,6 +18,10 @@ Route::prefix('auth')->group(function (): void {
 });
 
 Route::middleware('auth:api')->group(function (): void {
+    Route::get('customers/document/{document}', [CustomerController::class, 'showByDocument'])
+        ->where('document', '.*');
+    Route::patch('customers/{customer}/contact', [CustomerController::class, 'updateContact']);
+    Route::patch('customers/{customer}/activate', [CustomerController::class, 'activate']);
     Route::apiResource('customers', CustomerController::class)->parameters(['customers' => 'customer']);
 
     Route::prefix('vehicles')->group(function (): void {
