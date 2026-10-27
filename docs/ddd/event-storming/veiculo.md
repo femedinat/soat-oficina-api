@@ -18,6 +18,7 @@
 ```mermaid
 flowchart TD
     subgraph F1["FASE 1 — CADASTRO DE VEÍCULO"]
+        direction LR
         RM1["Modelo de Leitura: Formulário de Cadastro de Veículo"] --> A1["Ator: Atendente"]
         A1 --> C1["Comando: Cadastrar Novo Veículo"]
         C1 --> P1["Política: Verificar Placa no Sistema (Formato e Unicidade)"]
@@ -28,6 +29,7 @@ flowchart TD
     end
 
     subgraph F2["FASE 2 — ATUALIZAÇÃO DE DADOS"]
+        direction LR
         RM2["Modelo de Leitura: Ficha do Veículo"] --> A2["Ator: Atendente"]
         A2 --> C2["Comando: Atualizar Dados do Veículo (marca, modelo, ano, cor)"]
         C2 --> EV4["Evento: Dados do Veículo Atualizados"]
@@ -38,12 +40,14 @@ flowchart TD
     end
 
     subgraph F3["FASE 3 — CONSULTA"]
+        direction LR
         RM4["Modelo de Leitura: Histórico / Ficha do Veículo"] --> A4["Ator: Atendente / Cliente"]
         A4 --> C4["Query: Consultar Veículo por ID, Placa ou Cliente"]
         C4 --> N1["Fluxo apenas de leitura — não altera o agregado"]
     end
 
     subgraph F4["FASE 4 — TRANSFERÊNCIA, INATIVAÇÃO E REATIVAÇÃO"]
+        direction LR
         RM5["Modelo de Leitura: Ficha do Veículo"] --> A5["Ator: Atendente"]
         A5 --> C5["Comando: Transferir Veículo para Outro Cliente"]
         C5 --> P4["Política: Desvincular do cliente anterior e vincular ao novo"]
@@ -58,6 +62,8 @@ flowchart TD
         A7 --> C7["Comando: Reativar Veículo"]
         C7 --> EV8["Evento: Veículo Reativado"]
     end
+
+    F1 ~~~ F2 ~~~ F3 ~~~ F4
 ```
 
 ---

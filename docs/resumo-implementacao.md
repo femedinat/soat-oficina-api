@@ -52,24 +52,27 @@ Contém conceitos e estruturas compartilhadas entre diferentes contextos:
 Responsável pelo ciclo de vida das pessoas físicas e jurídicas atendidas pela oficina mecânica.
 
 - **Domínio (`src/Customer/Domain/`)**:
-  - **`Customer`**: Agregado raiz que encapsula o identificador (`CustomerId`), nome, documento (`Document`), e-mail (`Email`) e telefone opcional (`Phone`). Protege invariantes como tamanho máximo do nome (150 caracteres) e higienização de espaços duplicados.
+  - **`Customer`**: Agregado raiz que encapsula o identificador (`CustomerId`), nome, documento (`Document`), e-mail (`Email`), telefone opcional (`Phone`) e status ativo (`active`). Protege invariantes como tamanho máximo do nome (150 caracteres), higienização de espaços duplicados e bloqueio de edições em clientes inativos.
   - **`CustomerId`**: Identidade do agregado baseada em UUID v4 gerado no domínio.
   - **`Phone`**: Value Object que valida telefones brasileiros com DDD (10 ou 11 dígitos numéricos).
+  - **`CustomerContactNotifier`**: Porta de saída para envio de confirmação de atualização de contato por e-mail.
   - **`CustomerRepository`**: Interface com as operações de persistência e consulta (`save`, `findById`, `findByDocument`, `delete`, `paginate`).
 - **Aplicação (`src/Customer/Application/`)**:
   - **`RegisterCustomer`**: Valida a unicidade do CPF/CNPJ, instancia a entidade e a persiste.
   - **`UpdateCustomer`**: Atualiza dados do cliente garantindo que novo CPF/CNPJ não colida com outro cliente.
-  - **`FindCustomer`**: Consulta por ID com conversão de `CustomerId`.
-  - **`ListCustomers`**: Paginação ordenada com limite defensivo de no máximo 100 itens por página.
-  - **`DeleteCustomer`**: Remoção do cliente.
-  - **`CustomerInput` & `CustomerView`**: DTOs desacoplados dos contratos HTTP.
+  - **`UpdateCustomerContact`**: Atualiza exclusivamente o contato (`email`/`phone`) do cliente e aciona a política de confirmação por e-mail.
+  - **`FindCustomer` & `FindCustomerByDocument`**: Consultas por ID (`CustomerId`) ou por CPF/CNPJ (`Document`).
+  - **`ListCustomers`**: Paginação ordenada com filtro opcional de status (`onlyActive`) e limite defensivo de no máximo 100 itens por página.
+  - **`DeactivateCustomer` & `ActivateCustomer`**: Inativação lógica preservando histórico de serviços/veículos e reativação do cliente.
+  - **`CustomerInput`, `CustomerContactInput` & `CustomerView`**: DTOs desacoplados dos contratos HTTP.
 - **Infraestrutura (`src/Customer/Infrastructure/`)**:
   - **`CustomerModel`**: Model Eloquent mapeando a tabela `customers`.
   - **`EloquentCustomerRepository`**: Implementação concreta da interface `CustomerRepository`. Trata `UniqueConstraintViolationException` para resguardar concorrência.
+  - **`LaravelMailCustomerContactNotifier`**: Adaptador que envia e-mail de confirmação de atualização de contato via `Mailer`.
   - **`CustomerServiceProvider`**: Registra as injeções de dependência no container do Laravel.
 - **Interfaces (`src/Customer/Interfaces/Http/`)**:
   - **`CustomerController`**: Controller RESTful fino. Apenas orquestra entrada HTTP -> Caso de Uso -> Resource.
-  - **`CustomerRequest`**: FormRequest para validação sintática do payload HTTP.
+  - **`CustomerRequest` & `UpdateCustomerContactRequest`**: FormRequests para validação sintática dos payloads HTTP.
   - **`CustomerResource`**: Formatação padronizada JSON da resposta.
 
 ---
@@ -155,11 +158,14 @@ No arquivo [`bootstrap/app.php`](file:///home/raniery/projetos/18SOAT/soat-ofici
 | `GET` | `/api/auth/me` | `auth:api` | Retorna dados e perfil do usuário logado |
 | `POST` | `/api/auth/logout` | `auth:api` | Invalida o token JWT |
 | `POST` | `/api/users` | `auth:api`, `role:administrator` | Cria usuário com papel (`role`) e vínculo de cliente opcional/obrigatório |
-| `GET` | `/api/customers` | `auth:api` | Lista clientes paginados |
+| `GET` | `/api/customers` | `auth:api` | Lista clientes paginados (com filtro opcional `only_active`) |
 | `POST` | `/api/customers` | `auth:api` | Cadastra novo cliente (valida CPF/CNPJ) |
+| `GET` | `/api/customers/document/{document}` | `auth:api` | Consulta cliente por CPF/CNPJ |
 | `GET` | `/api/customers/{customer}` | `auth:api` | Consulta cliente por ID |
 | `PUT` | `/api/customers/{customer}` | `auth:api` | Atualiza dados do cliente |
-| `DELETE` | `/api/customers/{customer}` | `auth:api` | Exclui cliente |
+| `PATCH` | `/api/customers/{customer}/contact` | `auth:api` | Atualiza contato (telefone/email) e envia confirmação por e-mail |
+| `PATCH` | `/api/customers/{customer}/activate` | `auth:api` | Reativa cliente inativo |
+| `DELETE` | `/api/customers/{customer}` | `auth:api` | Inativa cliente preservando histórico de serviços e veículos |
 
 A documentação interativa OpenAPI 3.1 é servida nativamente pelo Scramble em `/docs/api` com suporte completo à autorização via Bearer JWT.
 

@@ -15,7 +15,7 @@ Para facilitar a leitura, manutenção modular pela equipe e rastreabilidade dir
 | Agregado | Contexto | Documentação Detalhada |
 |---|---|---|
 | **Veículo** | Clientes e Veículos (`src/Customer`) | [`event-storming/veiculo.md`](event-storming/veiculo.md) |
-| **Cliente** | Clientes e Veículos (`src/Customer`) | _Em elaboração pelo grupo (Página 6 do PDF)_ |
+| **Cliente** | Clientes e Veículos (`src/Customer`) | [`event-storming/cliente.md`](event-storming/cliente.md) |
 | **Ordem de Serviço (OS)** | Atendimento (`src/ServiceOrder`) | _Em elaboração pelo grupo (Página 5 do PDF)_ |
 | **Peça / Insumo** | Estoque (`src/Inventory`) | _Em elaboração pelo grupo (Página 9 do PDF)_ |
 | **Serviço** | Catálogo (`src/Catalog`) | _Em elaboração pelo grupo (Página 14 do PDF)_ |
