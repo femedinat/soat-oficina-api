@@ -16,6 +16,7 @@ final readonly class CustomerView
         public string $document,
         public string $email,
         public ?string $phone,
+        public bool $active = true,
     ) {}
 
     public static function fromEntity(Customer $customer): self
@@ -27,6 +28,7 @@ final readonly class CustomerView
             document: $customer->document()->value,
             email: $customer->email()->value,
             phone: $customer->phone()?->value,
+            active: $customer->isActive(),
         );
     }
 }

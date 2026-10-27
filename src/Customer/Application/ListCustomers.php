@@ -16,9 +16,13 @@ final readonly class ListCustomers
     public function __construct(private CustomerRepository $customers) {}
 
     /** @return Page<CustomerView> */
-    public function execute(int $page = 1, int $perPage = 15): Page
+    public function execute(int $page = 1, int $perPage = 15, ?bool $onlyActive = null): Page
     {
-        $result = $this->customers->paginate(max(1, $page), min(max(1, $perPage), self::MAX_PER_PAGE));
+        $result = $this->customers->paginate(
+            max(1, $page),
+            min(max(1, $perPage), self::MAX_PER_PAGE),
+            $onlyActive,
+        );
 
         return new Page(
             array_map(
