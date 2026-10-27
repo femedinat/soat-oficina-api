@@ -13,16 +13,27 @@ Route::prefix('auth')->group(function (): void {
 
     Route::middleware('auth:api')->group(function (): void {
         Route::get('me', [AuthController::class, 'me']);
+        Route::post('refresh', [AuthController::class, 'refresh']);
         Route::post('logout', [AuthController::class, 'logout']);
     });
 });
 
 Route::middleware('auth:api')->group(function (): void {
-    Route::get('customers/document/{document}', [CustomerController::class, 'showByDocument'])
-        ->where('document', '.*');
-    Route::patch('customers/{customer}/contact', [CustomerController::class, 'updateContact']);
-    Route::patch('customers/{customer}/activate', [CustomerController::class, 'activate']);
-    Route::apiResource('customers', CustomerController::class)->parameters(['customers' => 'customer']);
+    Route::middleware('role:administrator,mechanic')->group(function (): void {
+        Route::get('customers/document/{document}', [CustomerController::class, 'showByDocument'])
+            ->where('document', '.*');
+        Route::apiResource('customers', CustomerController::class)
+            ->only(['index', 'show'])
+            ->parameters(['customers' => 'customer']);
+    });
+
+    Route::middleware('role:administrator')->group(function (): void {
+        Route::patch('customers/{customer}/contact', [CustomerController::class, 'updateContact']);
+        Route::patch('customers/{customer}/activate', [CustomerController::class, 'activate']);
+        Route::apiResource('customers', CustomerController::class)
+            ->only(['store', 'update', 'destroy'])
+            ->parameters(['customers' => 'customer']);
+    });
 
     Route::prefix('vehicles')->group(function (): void {
         Route::get('/', [VehicleController::class, 'index']);

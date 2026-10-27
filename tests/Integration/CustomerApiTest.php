@@ -6,6 +6,9 @@ namespace Tests\Integration;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
+use Oficina\Customer\Infrastructure\CustomerModel;
+use Oficina\Identity\Domain\Role;
 use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
 use Tests\TestCase;
 
@@ -30,6 +33,28 @@ final class CustomerApiTest extends TestCase
     }
 
     /** @return array<string, string> */
+    private function headersFor(Role $role): array
+    {
+        $attributes = ['role' => $role];
+
+        if ($role->requiresCustomer()) {
+            $linked = new CustomerModel;
+            $linked->id = (string) Str::uuid();
+            $linked->fill([
+                'name' => 'Cliente Logado',
+                'document' => (string) mt_rand(10000000000, 99999999999),
+                'email' => 'logado-'.Str::random(6).'@example.com',
+            ]);
+            $linked->save();
+            $attributes['customer_id'] = $linked->id;
+        }
+
+        $user = User::factory()->create($attributes);
+
+        return ['Authorization' => 'Bearer '.JWTAuth::fromUser($user)];
+    }
+
+    /** @return array<string, string> */
     private function payload(string $document = self::CPF): array
     {
         return ['name' => 'Maria da Silva', 'document' => $document, 'email' => 'maria@example.com', 'phone' => '(11) 98765-4321'];
@@ -47,6 +72,89 @@ final class CustomerApiTest extends TestCase
         $this->patchJson("/api/customers/$id/contact", ['email' => 'm@example.com'])->assertUnauthorized();
         $this->patchJson("/api/customers/$id/activate")->assertUnauthorized();
         $this->deleteJson("/api/customers/$id")->assertUnauthorized();
+    }
+
+    public function test_non_administrators_receive_forbidden_on_write_routes(): void
+    {
+        $existing = new CustomerModel;
+        $existing->id = '2f6b8f4e-3b0e-4c1f-9d77-0a6f6f1f0c11';
+        $existing->fill(['name' => 'Original', 'document' => '52998224725', 'email' => 'orig@example.com']);
+        $existing->save();
+
+        foreach ([Role::CUSTOMER, Role::MECHANIC] as $role) {
+            $headers = $this->headersFor($role);
+
+            $this->postJson('/api/customers', $this->payload(self::CNPJ), $headers)->assertForbidden();
+            $this->putJson("/api/customers/{$existing->id}", [...$this->payload(), 'name' => 'Alterado'], $headers)->assertForbidden();
+            $this->patchJson("/api/customers/{$existing->id}/contact", ['email' => 'novo@example.com'], $headers)->assertForbidden();
+            $this->patchJson("/api/customers/{$existing->id}/activate", [], $headers)->assertForbidden();
+            $this->deleteJson("/api/customers/{$existing->id}", [], $headers)->assertForbidden();
+        }
+
+        $this->assertDatabaseHas('customers', ['id' => $existing->id, 'name' => 'Original']);
+        $this->assertDatabaseMissing('customers', ['document' => '11222333000181']);
+    }
+
+    public function test_customer_role_receives_forbidden_on_read_routes(): void
+    {
+        $existing = new CustomerModel;
+        $existing->id = '2f6b8f4e-3b0e-4c1f-9d77-0a6f6f1f0c11';
+        $existing->fill(['name' => 'Original', 'document' => '52998224725', 'email' => 'orig@example.com']);
+        $existing->save();
+
+        $headers = $this->headersFor(Role::CUSTOMER);
+
+        $this->getJson('/api/customers', $headers)->assertForbidden();
+        $this->getJson("/api/customers/{$existing->id}", $headers)->assertForbidden();
+        $this->getJson('/api/customers/document/52998224725', $headers)->assertForbidden();
+    }
+
+    public function test_mechanic_can_read_customers(): void
+    {
+        $existing = new CustomerModel;
+        $existing->id = '2f6b8f4e-3b0e-4c1f-9d77-0a6f6f1f0c11';
+        $existing->fill(['name' => 'Original', 'document' => '52998224725', 'email' => 'orig@example.com']);
+        $existing->save();
+
+        $headers = $this->headersFor(Role::MECHANIC);
+
+        $this->getJson('/api/customers', $headers)->assertOk();
+        $this->getJson("/api/customers/{$existing->id}", $headers)
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Original');
+        $this->getJson('/api/customers/document/52998224725', $headers)
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Original');
+    }
+
+    public function test_lists_customers_filtered_by_document(): void
+    {
+        $this->postJson('/api/customers', $this->payload(), $this->headers)->assertCreated();
+        $this->postJson('/api/customers', [...$this->payload(self::CNPJ), 'name' => 'Auto Peças'], $this->headers)->assertCreated();
+
+        // Admin consulta por CPF formatado
+        $this->getJson('/api/customers?document='.urlencode(self::CPF), $this->headers)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.name', 'Maria da Silva')
+            ->assertJsonPath('meta.total', 1);
+
+        // Mecânico consulta por CNPJ sem máscara (fluxo de OS)
+        $mechanicHeaders = $this->headersFor(Role::MECHANIC);
+        $this->getJson('/api/customers?document=11222333000181', $mechanicHeaders)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.name', 'Auto Peças');
+
+        // Documento não cadastrado
+        $this->getJson('/api/customers?document=11144477735', $this->headers)
+            ->assertOk()
+            ->assertJsonCount(0, 'data')
+            ->assertJsonPath('meta.total', 0);
+
+        // Documento com formato inválido
+        $this->getJson('/api/customers?document=invalido', $this->headers)
+            ->assertUnprocessable();
     }
 
     public function test_creates_customer_with_cpf(): void

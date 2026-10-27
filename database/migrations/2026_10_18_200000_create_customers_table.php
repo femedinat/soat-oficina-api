@@ -19,6 +19,7 @@ return new class extends Migration
             $table->string('phone', 11)->nullable();
             $table->boolean('active')->default(true)->index();
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 

@@ -95,4 +95,32 @@ final class AuthApiTest extends TestCase
         $this->app['auth']->forgetGuards();
         $this->getJson('/api/auth/me', $headers)->assertUnauthorized();
     }
+
+    public function test_refresh_returns_new_jwt(): void
+    {
+        $this->admin();
+        $token = $this->postJson('/api/auth/login', ['email' => 'admin@oficina.local', 'password' => 'segredo-123'])->json('access_token');
+        $headers = ['Authorization' => 'Bearer '.$token];
+
+        $response = $this->postJson('/api/auth/refresh', [], $headers);
+
+        $response->assertOk()
+            ->assertJsonStructure(['access_token', 'token_type', 'expires_in'])
+            ->assertJsonPath('token_type', 'bearer')
+            ->assertJsonPath('expires_in', 3600);
+
+        $newToken = (string) $response->json('access_token');
+        self::assertNotSame($token, $newToken);
+
+        $this->app['auth']->forgetGuards();
+        $this->app['tymon.jwt']->unsetToken();
+
+        $this->getJson('/api/auth/me', ['Authorization' => 'Bearer '.$newToken])
+            ->assertOk()
+            ->assertJsonPath('email', 'admin@oficina.local');
+
+        $this->app['auth']->forgetGuards();
+        $this->app['tymon.jwt']->unsetToken();
+        $this->getJson('/api/auth/me', $headers)->assertUnauthorized();
+    }
 }

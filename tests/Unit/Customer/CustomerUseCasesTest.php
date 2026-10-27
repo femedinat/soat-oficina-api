@@ -157,6 +157,31 @@ final class CustomerUseCasesTest extends TestCase
         self::assertSame(ListCustomers::MAX_PER_PAGE, $clamped->perPage);
     }
 
+    public function test_lists_filtered_by_document(): void
+    {
+        $register = new RegisterCustomer($this->repository);
+        $customer1 = $register->execute($this->input('52998224725'));
+        $register->execute($this->input('11222333000181'));
+
+        $listCustomers = new ListCustomers($this->repository);
+
+        $found = $listCustomers->execute(1, 15, '529.982.247-25');
+        self::assertCount(1, $found->items);
+        self::assertSame(1, $found->total);
+        self::assertSame($customer1->id, $found->items[0]->id);
+
+        $notFound = $listCustomers->execute(1, 15, '11144477735');
+        self::assertCount(0, $notFound->items);
+        self::assertSame(0, $notFound->total);
+    }
+
+    public function test_lists_filtered_by_invalid_document_throws(): void
+    {
+        $this->expectException(InvalidValueException::class);
+
+        (new ListCustomers($this->repository))->execute(1, 15, 'documento-invalido');
+    }
+
     public function test_updates_customer_contact_and_sends_confirmation_notification(): void
     {
         $created = (new RegisterCustomer($this->repository))->execute($this->input());
@@ -209,13 +234,13 @@ final class CustomerUseCasesTest extends TestCase
         (new DeactivateCustomer($this->repository))->execute($first->id);
 
         self::assertFalse((new FindCustomer($this->repository))->execute($first->id)->active);
-        self::assertSame(1, (new ListCustomers($this->repository))->execute(1, 15, true)->total);
-        self::assertSame(1, (new ListCustomers($this->repository))->execute(1, 15, false)->total);
-        self::assertSame(2, (new ListCustomers($this->repository))->execute(1, 15, null)->total);
+        self::assertSame(1, (new ListCustomers($this->repository))->execute(1, 15, null, true)->total);
+        self::assertSame(1, (new ListCustomers($this->repository))->execute(1, 15, null, false)->total);
+        self::assertSame(2, (new ListCustomers($this->repository))->execute(1, 15, null, null)->total);
 
         $reactivated = (new ActivateCustomer($this->repository))->execute($first->id);
         self::assertTrue($reactivated->active);
-        self::assertSame(2, (new ListCustomers($this->repository))->execute(1, 15, true)->total);
+        self::assertSame(2, (new ListCustomers($this->repository))->execute(1, 15, null, true)->total);
         self::assertNotEmpty($second->id);
     }
 

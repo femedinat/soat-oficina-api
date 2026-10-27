@@ -11,13 +11,21 @@ Conforme mapeado na documentação DDD do projeto (Página 8 de [`event-storming
 | # | Termo | Definição do Negócio (Glossário) | Contexto Delimitado (Bounded Context) | Representação no Código (`Oficina\`) |
 |---|---|---|---|---|
 | 1 | **Ordem de Serviço (OS)** | Documento central que acompanha todo o ciclo de vida do atendimento, registrando o veículo, o cliente, os itens adicionados e o orçamento gerado. | Contexto de Atendimento (*Core Domain*) | `Oficina\ServiceOrder\Domain\...` |
-| 2 | **Cliente** | Pessoa física ou jurídica que contrata os serviços, identificada unicamente e validada pelo seu CPF ou CNPJ. | Contexto Administrativo (*Generic Domain*) | `Oficina\Customer\Domain\...` + VO [`Document`](../../src/Shared/Domain/ValueObject/Document.php) |
-| 3 | **Veículo** | O automóvel do cliente que passará pela manutenção, identificado unicamente por sua placa, marca, modelo e ano. | Contexto Administrativo (*Generic Domain*) | [`Vehicle`](../../src/Customer/Domain/Entity/Vehicle.php) + VO [`LicensePlate`](../../src/Shared/Domain/ValueObject/LicensePlate.php) |
+| 2 | **Cliente (`Customer`)** | Pessoa física ou jurídica que contrata os serviços, identificada unicamente e validada pelo seu CPF ou CNPJ. | Contexto Administrativo (*Generic Domain*) | [`Customer`](../../src/Customer/Domain/Customer.php) + VO [`Document`](../../src/Shared/Domain/ValueObject/Document.php) |
+| 3 | **Veículo (`Vehicle`)** | O automóvel do cliente que passará pela manutenção, identificado unicamente por sua placa, marca, modelo e ano. | Contexto Administrativo (*Generic Domain*) | [`Vehicle`](../../src/Customer/Domain/Entity/Vehicle.php) + VO [`LicensePlate`](../../src/Shared/Domain/ValueObject/LicensePlate.php) |
 | 4 | **Serviço** | Procedimento técnico/mecânico (ex: troca de óleo, alinhamento) solicitado para inclusão na OS. | Contexto Administrativo (Catálogo) / Atendimento | `Oficina\Catalog\Domain\...` |
 | 5 | **Peça / Insumo** | Material físico necessário para a execução da OS, que possui quantidade controlada para baixa no estoque. | Contexto de Estoque (*Support Domain*) | `Oficina\Inventory\Domain\...` |
 | 6 | **Orçamento** | Cálculo de valores gerado automaticamente pelo sistema, somando os preços das peças e serviços atrelados à OS. | Contexto de Atendimento (*Core Domain*) | `Oficina\ServiceOrder\Domain\...` |
 | 7 | **Status da OS** | Estado atual da Ordem de Serviço que dita em que fase o veículo está. Transita entre: *Recebida*, *Em diagnóstico*, *Aguardando aprovação*, *Em execução*, *Finalizada*, *Entregue* (e *Cancelada*). | Contexto de Atendimento (*Core Domain*) | [`ServiceOrderStatus`](../../src/ServiceOrder/Domain/ServiceOrderStatus.php) |
 | 8 | **Mecânico** | Pessoa física ou jurídica que executará os serviços contratados pelo Cliente, realizando comandos operacionais no sistema. | Contexto de Atendimento (*Core Domain*) | Ator autenticado (`Oficina\Identity\...`) |
+| 9 | **Administrador** | Usuário interno da oficina com acesso total às APIs administrativas. | Identidade | [`Role::ADMINISTRATOR`](../../src/Identity/Domain/Role.php) |
+| 10 | **Usuário do Sistema (`SystemUser`)** | Conta de acesso que se autentica por credenciais na API. | Identidade | [`SystemUser`](../../src/Identity/Domain/SystemUser.php) |
+| 11 | **Perfil de Acesso (`Role`)** | Nível de permissão do usuário: `Administrador`, `Mecânico` ou `Cliente`. | Identidade | [`Role`](../../src/Identity/Domain/Role.php) |
+| 12 | **Vínculo Usuário-Cliente** | Relação de um para um (1:1) que associa uma conta de usuário com perfil `Cliente` ao seu cadastro de `Cliente`. | Identidade / Clientes | `SystemUser::$customerId` |
+| 13 | **Token de Acesso (JWT)** | Credencial temporária (TTL de 60 min), enviada como `Authorization: Bearer`. | Identidade | `JwtTokenIssuer` |
+| 14 | **Documento (`Document`)** | CPF (pessoa física) ou CNPJ (pessoa jurídica, inclusive alfanumérico). É obrigatório e válido, e identifica o cliente. | Shared Kernel | [`Document`](../../src/Shared/Domain/ValueObject/Document.php) |
+| 15 | **E-mail (`Email`)** | Endereço de contato normalizado em minúsculas. | Shared Kernel | [`Email`](../../src/Shared/Domain/ValueObject/Email.php) |
+| 16 | **Telefone (`Phone`)** | Telefone de contato com DDD válido (10 ou 11 dígitos). É opcional. | Clientes | [`Phone`](../../src/Customer/Domain/Phone.php) |
 
 ---
 
@@ -50,7 +58,7 @@ Conforme o Diagrama Tático de Agregados (Página 3 de [`diagramas.pdf`](diagram
 | Elemento | Classificação DDD | Contexto | Objetos de Valor / Entidades Internas | Identificador de Referência Externa |
 |---|---|---|---|---|
 | **Ordem de Serviço** | Raiz de Agregado (*Aggregate Root*) | Atendimento | Entidades internas: `Item Serviço`, `Item Insumo/Peça`<br>Objetos de Valor: `StatusOS` ([`ServiceOrderStatus`](../../src/ServiceOrder/Domain/ServiceOrderStatus.php)), `Valor Orçamento` | Referencia `cliente_id`, `veiculo_id` e `item_id` por ID |
-| **Cliente** | Raiz de Agregado (*Aggregate Root*) | Administrativo (`Customer`) | Objeto de Valor: `CpfCnpj` ([`Document`](../../src/Shared/Domain/ValueObject/Document.php)) | `cliente_id` (UUID) |
+| **Cliente** | Raiz de Agregado (*Aggregate Root*) | Administrativo (`Customer`) | Objetos de Valor: `CpfCnpj` ([`Document`](../../src/Shared/Domain/ValueObject/Document.php)), [`Email`](../../src/Shared/Domain/ValueObject/Email.php), [`Phone`](../../src/Customer/Domain/Phone.php) | `cliente_id` (UUID) |
 | **Veículo** | Raiz de Agregado (*Aggregate Root*) | Administrativo (`Customer`) | Objeto de Valor: `Placa` ([`LicensePlate`](../../src/Shared/Domain/ValueObject/LicensePlate.php)) | `veiculo_id` (UUID) |
 | **Item Insumo / Peça** | Raiz de Agregado (*Aggregate Root*) | Estoque (`Inventory`) | Quantidade em estoque, preço unitário | `item_id` (UUID) |
 | **Serviço** | Raiz de Agregado (*Aggregate Root*) | Catálogo (`Catalog`) | Preço base, tempo estimado de execução | `servico_id` (UUID) |

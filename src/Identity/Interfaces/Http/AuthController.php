@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Oficina\Identity\Application\AuthenticateSystemUser;
+use PHPOpenSourceSaver\JWTAuth\JWTGuard;
 
 /**
  * @tags Autenticação
@@ -54,6 +55,27 @@ final class AuthController extends Controller
             'email' => $user->email,
             'role' => $user->role->value,
             'customer_id' => $user->customer_id,
+        ]);
+    }
+
+    /**
+     * Renovar token (refresh)
+     *
+     * Invalida o token atual e devolve um novo token JWT.
+     *
+     * @response array{access_token: string, token_type: string, expires_in: int}
+     */
+    public function refresh(): JsonResponse
+    {
+        /** @var JWTGuard $guard */
+        $guard = Auth::guard('api');
+        /** @var string $newToken */
+        $newToken = $guard->refresh();
+
+        return response()->json([
+            'access_token' => $newToken,
+            'token_type' => 'bearer',
+            'expires_in' => $guard->factory()->getTTL() * 60,
         ]);
     }
 

@@ -19,7 +19,8 @@ use Oficina\Customer\Application\UpdateCustomer;
 use Oficina\Customer\Application\UpdateCustomerContact;
 
 /**
- * Ciclo de vida completo de clientes (protegido por JWT). Sem regra de negócio: apenas traduz HTTP <-> casos de uso.
+ * Ciclo de vida completo de clientes (protegido por JWT e controle de acesso por papel).
+ * Sem regra de negócio: apenas traduz HTTP <-> casos de uso.
  * Erros de domínio são convertidos em 404/409/422 em bootstrap/app.php.
  *
  * @tags Clientes
@@ -29,13 +30,14 @@ final class CustomerController extends Controller
     /**
      * Listar clientes
      *
-     * Paginado, ordenado por nome, com filtro opcional de status (`only_active`). `per_page` máximo: 100.
+     * Paginado, ordenado por nome. Suporta filtro por CPF/CNPJ (`document`) e status (`only_active`). `per_page` máximo: 100.
      *
      * @response array{data: list<array{id: string, name: string, document_type: string, document: string, email: string, phone: string|null, active: bool}>, meta: array{page: int, per_page: int, total: int, last_page: int}}
      */
     public function index(Request $request, ListCustomers $listCustomers): JsonResponse
     {
         $validated = $request->validate([
+            'document' => ['sometimes', 'string'],
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:'.ListCustomers::MAX_PER_PAGE],
         ]);
@@ -47,6 +49,7 @@ final class CustomerController extends Controller
         $result = $listCustomers->execute(
             (int) ($validated['page'] ?? 1),
             (int) ($validated['per_page'] ?? 15),
+            isset($validated['document']) ? (string) $validated['document'] : null,
             $onlyActive,
         );
 
