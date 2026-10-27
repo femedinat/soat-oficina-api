@@ -17,8 +17,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property string $document
  * @property string $email
  * @property string|null $phone
+ * @property bool $active
  */
-#[Fillable(['name', 'document', 'email', 'phone'])]
+#[Fillable(['name', 'document', 'email', 'phone', 'active'])]
 final class CustomerModel extends Model
 {
     public $incrementing = false;
@@ -26,6 +27,16 @@ final class CustomerModel extends Model
     protected $table = 'customers';
 
     protected $keyType = 'string';
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'active' => 'boolean',
+        ];
+    }
 
     /**
      * Usuário de acesso vinculado (1:1), se existir.
