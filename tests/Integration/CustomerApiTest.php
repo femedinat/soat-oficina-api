@@ -41,8 +41,11 @@ final class CustomerApiTest extends TestCase
 
         $this->getJson('/api/customers')->assertUnauthorized();
         $this->postJson('/api/customers', $this->payload())->assertUnauthorized();
+        $this->getJson('/api/customers/document/52998224725')->assertUnauthorized();
         $this->getJson("/api/customers/$id")->assertUnauthorized();
         $this->putJson("/api/customers/$id", $this->payload())->assertUnauthorized();
+        $this->patchJson("/api/customers/$id/contact", ['email' => 'm@example.com'])->assertUnauthorized();
+        $this->patchJson("/api/customers/$id/activate")->assertUnauthorized();
         $this->deleteJson("/api/customers/$id")->assertUnauthorized();
     }
 
@@ -53,8 +56,9 @@ final class CustomerApiTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('data.document', '52998224725')
             ->assertJsonPath('data.document_type', 'CPF')
-            ->assertJsonPath('data.phone', '11987654321');
-        $this->assertDatabaseHas('customers', ['id' => $response->json('data.id'), 'document' => '52998224725']);
+            ->assertJsonPath('data.phone', '11987654321')
+            ->assertJsonPath('data.active', true);
+        $this->assertDatabaseHas('customers', ['id' => $response->json('data.id'), 'document' => '52998224725', 'active' => true]);
     }
 
     public function test_creates_customer_with_cnpj(): void
@@ -137,14 +141,74 @@ final class CustomerApiTest extends TestCase
         $this->putJson('/api/customers/2f6b8f4e-3b0e-4c1f-9d77-0a6f6f1f0c11', $this->payload(), $this->headers)->assertNotFound();
     }
 
-    public function test_deletes_customer(): void
+    public function test_deactivates_and_reactivates_customer_preserving_history(): void
     {
         $id = $this->postJson('/api/customers', $this->payload(), $this->headers)->json('data.id');
 
         $this->deleteJson("/api/customers/$id", [], $this->headers)->assertNoContent();
 
-        $this->assertDatabaseMissing('customers', ['id' => $id]);
-        $this->deleteJson("/api/customers/$id", [], $this->headers)->assertNotFound();
+        $this->assertDatabaseHas('customers', ['id' => $id, 'active' => false]);
+
+        $this->getJson('/api/customers?only_active=true', $this->headers)
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->getJson('/api/customers?only_active=false', $this->headers)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.active', false);
+
+        // Cliente inativo não permite atualização de dados ou contato
+        $this->putJson("/api/customers/$id", $this->payload(), $this->headers)
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Não é possível atualizar os dados de um cliente inativo.');
+
+        $this->patchJson("/api/customers/$id/contact", ['email' => 'novo@example.com'], $this->headers)
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Não é possível atualizar o contato de um cliente inativo.');
+
+        // Reativação do cliente
+        $this->patchJson("/api/customers/$id/activate", [], $this->headers)
+            ->assertOk()
+            ->assertJsonPath('data.id', $id)
+            ->assertJsonPath('data.active', true);
+
+        $this->assertDatabaseHas('customers', ['id' => $id, 'active' => true]);
+    }
+
+    public function test_updates_customer_contact_and_sends_confirmation_email(): void
+    {
+        $id = $this->postJson('/api/customers', $this->payload(), $this->headers)->json('data.id');
+
+        $this->patchJson("/api/customers/$id/contact", [
+            'email' => 'maria.contato@example.com',
+            'phone' => '(11) 91234-5678',
+        ], $this->headers)
+            ->assertOk()
+            ->assertJsonPath('data.email', 'maria.contato@example.com')
+            ->assertJsonPath('data.phone', '11912345678');
+
+        $this->assertDatabaseHas('customers', [
+            'id' => $id,
+            'email' => 'maria.contato@example.com',
+            'phone' => '11912345678',
+        ]);
+    }
+
+    public function test_shows_customer_by_document(): void
+    {
+        $id = $this->postJson('/api/customers', $this->payload(), $this->headers)->json('data.id');
+
+        $this->getJson('/api/customers/document/529.982.247-25', $this->headers)
+            ->assertOk()
+            ->assertJsonPath('data.id', $id)
+            ->assertJsonPath('data.document', '52998224725');
+
+        $this->getJson('/api/customers/document/11144477735', $this->headers)
+            ->assertNotFound();
+
+        $this->getJson('/api/customers/document/111.111.111-11', $this->headers)
+            ->assertUnprocessable();
     }
 
     public function test_lists_customers_paginated(): void

@@ -42,9 +42,12 @@ final class InMemoryCustomerRepository implements CustomerRepository
         unset($this->items[$customer->id->value]);
     }
 
-    public function paginate(int $page, int $perPage): Page
+    public function paginate(int $page, int $perPage, ?bool $onlyActive = null): Page
     {
-        $all = array_values($this->items);
+        $all = array_values(array_filter(
+            $this->items,
+            static fn (Customer $customer): bool => $onlyActive === null || $customer->isActive() === $onlyActive,
+        ));
 
         return new Page(array_slice($all, ($page - 1) * $perPage, $perPage), count($all), $page, $perPage);
     }

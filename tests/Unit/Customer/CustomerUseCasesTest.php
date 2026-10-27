@@ -4,16 +4,23 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Customer;
 
+use Oficina\Customer\Application\ActivateCustomer;
+use Oficina\Customer\Application\CustomerContactInput;
 use Oficina\Customer\Application\CustomerInput;
+use Oficina\Customer\Application\DeactivateCustomer;
 use Oficina\Customer\Application\DeleteCustomer;
 use Oficina\Customer\Application\FindCustomer;
+use Oficina\Customer\Application\FindCustomerByDocument;
 use Oficina\Customer\Application\ListCustomers;
 use Oficina\Customer\Application\RegisterCustomer;
 use Oficina\Customer\Application\UpdateCustomer;
+use Oficina\Customer\Application\UpdateCustomerContact;
 use Oficina\Customer\Domain\Exception\CustomerNotFoundException;
 use Oficina\Customer\Domain\Exception\DocumentAlreadyRegisteredException;
+use Oficina\Shared\Domain\Exception\DomainException;
 use Oficina\Shared\Domain\Exception\InvalidValueException;
 use PHPUnit\Framework\TestCase;
+use Tests\Support\FakeCustomerContactNotifier;
 use Tests\Support\InMemoryCustomerRepository;
 
 final class CustomerUseCasesTest extends TestCase
@@ -148,5 +155,91 @@ final class CustomerUseCasesTest extends TestCase
         $clamped = (new ListCustomers($this->repository))->execute(0, 1000);
         self::assertSame(1, $clamped->page);
         self::assertSame(ListCustomers::MAX_PER_PAGE, $clamped->perPage);
+    }
+
+    public function test_updates_customer_contact_and_sends_confirmation_notification(): void
+    {
+        $created = (new RegisterCustomer($this->repository))->execute($this->input());
+        $notifier = new FakeCustomerContactNotifier;
+
+        $updated = (new UpdateCustomerContact($this->repository, $notifier))->execute(
+            $created->id,
+            new CustomerContactInput('contato.novo@example.com', '(11) 99999-8888'),
+        );
+
+        self::assertSame('contato.novo@example.com', $updated->email);
+        self::assertSame('11999998888', $updated->phone);
+        self::assertCount(1, $notifier->notifiedCustomers);
+        self::assertSame($created->id, $notifier->notifiedCustomers[0]->id->value);
+    }
+
+    public function test_update_contact_unknown_customer(): void
+    {
+        $this->expectException(CustomerNotFoundException::class);
+
+        (new UpdateCustomerContact($this->repository, new FakeCustomerContactNotifier))->execute(
+            '2f6b8f4e-3b0e-4c1f-9d77-0a6f6f1f0c11',
+            new CustomerContactInput('contato@example.com'),
+        );
+    }
+
+    public function test_finds_customer_by_document(): void
+    {
+        $created = (new RegisterCustomer($this->repository))->execute($this->input('529.982.247-25'));
+
+        $found = (new FindCustomerByDocument($this->repository))->execute('52998224725');
+
+        self::assertSame($created->id, $found->id);
+        self::assertSame('52998224725', $found->document);
+    }
+
+    public function test_find_by_document_unknown_customer(): void
+    {
+        $this->expectException(CustomerNotFoundException::class);
+
+        (new FindCustomerByDocument($this->repository))->execute('52998224725');
+    }
+
+    public function test_deactivates_and_reactivates_customer_and_filters_by_active_status(): void
+    {
+        $register = new RegisterCustomer($this->repository);
+        $first = $register->execute($this->input('52998224725'));
+        $second = $register->execute($this->input('11222333000181'));
+
+        (new DeactivateCustomer($this->repository))->execute($first->id);
+
+        self::assertFalse((new FindCustomer($this->repository))->execute($first->id)->active);
+        self::assertSame(1, (new ListCustomers($this->repository))->execute(1, 15, true)->total);
+        self::assertSame(1, (new ListCustomers($this->repository))->execute(1, 15, false)->total);
+        self::assertSame(2, (new ListCustomers($this->repository))->execute(1, 15, null)->total);
+
+        $reactivated = (new ActivateCustomer($this->repository))->execute($first->id);
+        self::assertTrue($reactivated->active);
+        self::assertSame(2, (new ListCustomers($this->repository))->execute(1, 15, true)->total);
+        self::assertNotEmpty($second->id);
+    }
+
+    public function test_deactivate_and_activate_unknown_customer(): void
+    {
+        $this->expectException(CustomerNotFoundException::class);
+
+        (new DeactivateCustomer($this->repository))->execute('2f6b8f4e-3b0e-4c1f-9d77-0a6f6f1f0c11');
+    }
+
+    public function test_activate_unknown_customer_throws_not_found(): void
+    {
+        $this->expectException(CustomerNotFoundException::class);
+
+        (new ActivateCustomer($this->repository))->execute('2f6b8f4e-3b0e-4c1f-9d77-0a6f6f1f0c11');
+    }
+
+    public function test_cannot_update_inactive_customer(): void
+    {
+        $created = (new RegisterCustomer($this->repository))->execute($this->input());
+        (new DeactivateCustomer($this->repository))->execute($created->id);
+
+        $this->expectException(DomainException::class);
+
+        (new UpdateCustomer($this->repository))->execute($created->id, $this->input(email: 'novo@example.com'));
     }
 }
