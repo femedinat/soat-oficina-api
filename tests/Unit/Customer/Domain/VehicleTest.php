@@ -122,6 +122,24 @@ final class VehicleTest extends TestCase
         self::assertSame('BRA2E19', $vehicle->licensePlate()->value);
     }
 
+    public function test_rejects_update_on_inactive_vehicle(): void
+    {
+        $vehicle = Vehicle::create(
+            licensePlate: LicensePlate::from('ABC1234'),
+            brand: 'Chevrolet',
+            model: 'Onix',
+            year: 2019,
+        );
+        $vehicle->deactivate();
+
+        $this->expectException(DomainException::class);
+        $vehicle->update(
+            brand: 'Chevrolet',
+            model: 'Onix Plus',
+            year: 2021,
+        );
+    }
+
     public function test_registers_mileage_evolution(): void
     {
         $vehicle = Vehicle::create(

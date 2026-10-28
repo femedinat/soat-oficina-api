@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Customer;
 
+use Illuminate\Contracts\Mail\Mailer;
 use Oficina\Customer\Application\ActivateCustomer;
 use Oficina\Customer\Application\CustomerContactInput;
 use Oficina\Customer\Application\CustomerInput;
@@ -15,11 +16,17 @@ use Oficina\Customer\Application\ListCustomers;
 use Oficina\Customer\Application\RegisterCustomer;
 use Oficina\Customer\Application\UpdateCustomer;
 use Oficina\Customer\Application\UpdateCustomerContact;
+use Oficina\Customer\Domain\Customer;
 use Oficina\Customer\Domain\Exception\CustomerNotFoundException;
 use Oficina\Customer\Domain\Exception\DocumentAlreadyRegisteredException;
+use Oficina\Customer\Infrastructure\LaravelMailCustomerContactNotifier;
 use Oficina\Shared\Domain\Exception\DomainException;
 use Oficina\Shared\Domain\Exception\InvalidValueException;
+use Oficina\Shared\Domain\ValueObject\Document;
+use Oficina\Shared\Domain\ValueObject\Email;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
+use RuntimeException;
 use Tests\Support\FakeCustomerContactNotifier;
 use Tests\Support\InMemoryCustomerRepository;
 
@@ -196,6 +203,50 @@ final class CustomerUseCasesTest extends TestCase
         self::assertSame('11999998888', $updated->phone);
         self::assertCount(1, $notifier->notifiedCustomers);
         self::assertSame($created->id, $notifier->notifiedCustomers[0]->id->value);
+        self::assertSame('maria@example.com', $notifier->previousEmails[0]?->value);
+    }
+
+    public function test_mail_notifier_sends_to_new_and_previous_email_and_logs_on_smtp_failure(): void
+    {
+        $customer = Customer::register(
+            'Maria da Silva',
+            Document::from('52998224725'),
+            Email::from('novo@example.com'),
+        );
+        $previousEmail = Email::from('antigo@example.com');
+
+        $capturedCallback = null;
+        $mailer = $this->createMock(Mailer::class);
+        $mailer->expects(self::once())
+            ->method('raw')
+            ->willReturnCallback(static function (string $text, callable $callback) use (&$capturedCallback): void {
+                $capturedCallback = $callback;
+            });
+
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::never())->method('warning');
+
+        $notifier = new LaravelMailCustomerContactNotifier($mailer, $logger);
+        $notifier->sendContactUpdatedConfirmation($customer, $previousEmail);
+        self::assertNotNull($capturedCallback);
+
+        // Quando o SMTP falha, não propaga exceção (evita 500 após o save) e registra warning no log.
+        $failingMailer = $this->createMock(Mailer::class);
+        $failingMailer->expects(self::once())
+            ->method('raw')
+            ->willThrowException(new RuntimeException('SMTP connection refused'));
+
+        $warningLogger = $this->createMock(LoggerInterface::class);
+        $warningLogger->expects(self::once())
+            ->method('warning')
+            ->with(
+                'Falha ao enviar confirmação de atualização de contato.',
+                self::callback(static fn (array $ctx): bool => $ctx['customer_id'] === $customer->id->value
+                    && $ctx['exception'] === 'SMTP connection refused'),
+            );
+
+        $resilientNotifier = new LaravelMailCustomerContactNotifier($failingMailer, $warningLogger);
+        $resilientNotifier->sendContactUpdatedConfirmation($customer, $previousEmail);
     }
 
     public function test_update_contact_unknown_customer(): void
