@@ -23,7 +23,7 @@ flowchart TD
         A1 --> C1["Comando: Cadastrar Novo Veículo"]
         C1 --> P1["Política: Verificar Placa no Sistema (Formato e Unicidade)"]
         P1 -->|Placa válida e única| EV1["Evento: Placa Validada / Veículo Cadastrado"]
-        P1 -->|Placa já existente| EV2["Evento: Placa Duplicada (Erro 422)"]
+        P1 -->|Placa já existente| EV2["Evento: Placa Duplicada (Erro 409)"]
         EV1 --> P2["Política: Associar ao Cliente"]
         P2 --> EV3["Evento: Veículo Associado ao Cliente"]
     end
@@ -73,7 +73,7 @@ flowchart TD
 1. **Validação Obrigatória de Placa**:
    - Toda placa é normalizada (remoção de espaços/hífens e conversão para maiúsculas) e validada pelo Objeto de Valor [`LicensePlate`](../../../src/Shared/Domain/ValueObject/LicensePlate.php) nos padrões `^[A-Z]{3}\d{4}$` (antigo) ou `^[A-Z]{3}\d[A-Z]\d{2}$` (Mercosul).
 2. **Unicidade de Placa no Sistema**:
-   - Não é permitido cadastrar dois veículos com a mesma placa (`VehicleAlreadyExistsException` $\rightarrow$ HTTP `422`).
+   - Não é permitido cadastrar dois veículos com a mesma placa (`VehicleAlreadyExistsException` $\rightarrow$ HTTP `409`).
 3. **Dados Obrigatórios (Edital Fase 1)**:
    - `placa` (`license_plate`), `marca` (`brand`), `modelo` (`model`) e `ano` (`year`) são obrigatórios.
    - O `ano` deve ser um ano automotivo válido (entre `1900` e `ano_atual + 1`).
@@ -81,7 +81,7 @@ flowchart TD
    - A quilometragem (`mileage`) não pode ser negativa (`>= 0`) e, ao registrar uma nova quilometragem em manutenção, o valor informado não pode ser inferior à quilometragem já registrada no veículo.
 5. **Inativação Segura e Operações em Veículo Inativo**:
    - A inativação (`deactivate()`) realiza exclusão lógica (`active = false`), preservando a integridade referencial e o histórico de Ordens de Serviço do veículo.
-   - Veículos inativos não permitem registro de nova quilometragem ou transferência de propriedade sem antes serem reativados (`activate()`).
+   - Veículos inativos não permitem atualização de dados cadastrais, registro de nova quilometragem ou transferência de propriedade sem antes serem reativados (`activate()`).
 
 ---
 
