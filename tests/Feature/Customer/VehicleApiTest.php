@@ -11,6 +11,7 @@ use Oficina\Customer\Domain\Entity\Vehicle;
 use Oficina\Customer\Domain\Exception\VehicleAlreadyExistsException;
 use Oficina\Customer\Infrastructure\CustomerModel;
 use Oficina\Customer\Infrastructure\Persistence\Eloquent\EloquentVehicleRepository;
+use Oficina\Customer\Infrastructure\Persistence\Eloquent\VehicleModel;
 use Oficina\Identity\Domain\Role;
 use Oficina\Shared\Domain\ValueObject\LicensePlate;
 use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
@@ -54,8 +55,26 @@ final class VehicleApiTest extends TestCase
         }
 
         $user = User::factory()->create($attributes);
+        $token = JWTAuth::fromUser($user);
+        auth('api')->forgetUser();
 
-        return ['Authorization' => 'Bearer '.JWTAuth::fromUser($user)];
+        return ['Authorization' => 'Bearer '.$token];
+    }
+
+    private function createVehicle(string $licensePlate = 'BRA2E19'): VehicleModel
+    {
+        $vehicle = new VehicleModel;
+        $vehicle->fill([
+            'license_plate' => $licensePlate,
+            'brand' => 'Volkswagen',
+            'model' => 'Nivus',
+            'year' => 2024,
+            'mileage' => 0,
+            'active' => true,
+        ]);
+        $vehicle->save();
+
+        return $vehicle;
     }
 
     private function createCustomer(string $id, string $document, bool $active = true): CustomerModel
@@ -90,12 +109,7 @@ final class VehicleApiTest extends TestCase
 
     public function test_non_administrators_receive_forbidden_on_write_routes(): void
     {
-        $vehicleId = $this->postJson('/api/vehicles', [
-            'license_plate' => 'BRA2E19',
-            'brand' => 'Volkswagen',
-            'model' => 'Nivus',
-            'year' => 2024,
-        ], $this->headers)->json('data.id');
+        $existing = $this->createVehicle();
 
         foreach ([Role::CUSTOMER, Role::MECHANIC] as $role) {
             $headers = $this->headersFor($role);
@@ -107,59 +121,47 @@ final class VehicleApiTest extends TestCase
                 'year' => 2020,
             ], $headers)->assertForbidden();
 
-            $this->putJson("/api/vehicles/{$vehicleId}", [
+            $this->putJson("/api/vehicles/{$existing->id}", [
                 'brand' => 'Volkswagen',
                 'model' => 'Nivus Highline',
                 'year' => 2024,
             ], $headers)->assertForbidden();
 
-            $this->patchJson("/api/vehicles/{$vehicleId}/mileage", [
+            $this->patchJson("/api/vehicles/{$existing->id}/mileage", [
                 'mileage' => 5000,
             ], $headers)->assertForbidden();
 
-            $this->patchJson("/api/vehicles/{$vehicleId}/transfer", [
+            $this->patchJson("/api/vehicles/{$existing->id}/transfer", [
                 'customer_id' => '550e8400-e29b-41d4-a716-446655440000',
             ], $headers)->assertForbidden();
 
-            $this->patchJson("/api/vehicles/{$vehicleId}/activate", [], $headers)->assertForbidden();
-            $this->deleteJson("/api/vehicles/{$vehicleId}", [], $headers)->assertForbidden();
+            $this->patchJson("/api/vehicles/{$existing->id}/activate", [], $headers)->assertForbidden();
+            $this->deleteJson("/api/vehicles/{$existing->id}", [], $headers)->assertForbidden();
         }
     }
 
     public function test_customer_role_receives_forbidden_on_read_routes(): void
     {
-        $vehicleId = $this->postJson('/api/vehicles', [
-            'license_plate' => 'BRA2E19',
-            'brand' => 'Volkswagen',
-            'model' => 'Nivus',
-            'year' => 2024,
-        ], $this->headers)->json('data.id');
-
+        $existing = $this->createVehicle();
         $headers = $this->headersFor(Role::CUSTOMER);
 
         $this->getJson('/api/vehicles', $headers)->assertForbidden();
-        $this->getJson("/api/vehicles/{$vehicleId}", $headers)->assertForbidden();
+        $this->getJson("/api/vehicles/{$existing->id}", $headers)->assertForbidden();
         $this->getJson('/api/vehicles/plate/BRA2E19', $headers)->assertForbidden();
     }
 
     public function test_mechanic_can_read_vehicles(): void
     {
-        $vehicleId = $this->postJson('/api/vehicles', [
-            'license_plate' => 'BRA2E19',
-            'brand' => 'Volkswagen',
-            'model' => 'Nivus',
-            'year' => 2024,
-        ], $this->headers)->json('data.id');
-
+        $existing = $this->createVehicle();
         $headers = $this->headersFor(Role::MECHANIC);
 
         $this->getJson('/api/vehicles', $headers)->assertOk();
-        $this->getJson("/api/vehicles/{$vehicleId}", $headers)
+        $this->getJson("/api/vehicles/{$existing->id}", $headers)
             ->assertOk()
             ->assertJsonPath('data.license_plate', 'BRA2E19');
         $this->getJson('/api/vehicles/plate/BRA2E19', $headers)
             ->assertOk()
-            ->assertJsonPath('data.id', $vehicleId);
+            ->assertJsonPath('data.id', $existing->id);
     }
 
     public function test_rejects_nonexistent_or_inactive_customer_on_create_and_transfer(): void
