@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -12,6 +13,9 @@ use Oficina\Identity\Interfaces\Http\RequireRole;
 use Oficina\Shared\Domain\Exception\ConflictException;
 use Oficina\Shared\Domain\Exception\DomainException;
 use Oficina\Shared\Domain\Exception\NotFoundException;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -32,8 +36,45 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         // Tradução das exceções de domínio para HTTP (o domínio não conhece HTTP).
-        $exceptions->render(fn (InvalidCredentialsException $e): JsonResponse => response()->json(['message' => $e->getMessage()], 401));
-        $exceptions->render(fn (NotFoundException $e): JsonResponse => response()->json(['message' => $e->getMessage()], 404));
-        $exceptions->render(fn (ConflictException $e): JsonResponse => response()->json(['message' => $e->getMessage()], 409));
-        $exceptions->render(fn (DomainException $e): JsonResponse => response()->json(['message' => $e->getMessage()], 422));
+        $exceptions->render(fn (InvalidCredentialsException $e): JsonResponse => response()->json(['message' => $e->getMessage()], Response::HTTP_UNAUTHORIZED));
+        $exceptions->render(fn (NotFoundException $e): JsonResponse => response()->json(['message' => $e->getMessage()], Response::HTTP_NOT_FOUND));
+        $exceptions->render(fn (ConflictException $e): JsonResponse => response()->json(['message' => $e->getMessage()], Response::HTTP_CONFLICT));
+        $exceptions->render(fn (DomainException $e): JsonResponse => response()->json(['message' => $e->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY));
+
+        $exceptions->render(function (AuthenticationException $exception, Request $request): ?JsonResponse {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return new JsonResponse([
+                    'message' => 'Não autenticado.',
+                ], Response::HTTP_UNAUTHORIZED);
+            }
+
+            return null;
+        });
+
+        $exceptions->render(function (NotFoundHttpException $exception, Request $request): ?JsonResponse {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                $previous = $exception->getPrevious();
+                if ($previous instanceof NotFoundException) {
+                    return new JsonResponse([
+                        'message' => $previous->getMessage(),
+                    ], Response::HTTP_NOT_FOUND);
+                }
+
+                return new JsonResponse([
+                    'message' => 'Recurso ou rota não encontrada.',
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            return null;
+        });
+
+        $exceptions->render(function (MethodNotAllowedHttpException $exception, Request $request): ?JsonResponse {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return new JsonResponse([
+                    'message' => 'Método HTTP não permitido para esta rota.',
+                ], Response::HTTP_METHOD_NOT_ALLOWED);
+            }
+
+            return null;
+        });
     })->create();

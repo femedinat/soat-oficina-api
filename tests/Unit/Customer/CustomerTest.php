@@ -7,6 +7,7 @@ namespace Tests\Unit\Customer;
 use Oficina\Customer\Domain\Customer;
 use Oficina\Customer\Domain\CustomerId;
 use Oficina\Customer\Domain\Phone;
+use Oficina\Shared\Domain\Exception\DomainException;
 use Oficina\Shared\Domain\Exception\InvalidValueException;
 use Oficina\Shared\Domain\ValueObject\Document;
 use Oficina\Shared\Domain\ValueObject\Email;
@@ -23,6 +24,7 @@ final class CustomerTest extends TestCase
         self::assertSame('52998224725', $customer->document()->value);
         self::assertSame('maria@example.com', $customer->email()->value);
         self::assertSame('11987654321', $customer->phone()?->value);
+        self::assertTrue($customer->isActive());
         self::assertNotEmpty($customer->id->value);
     }
 
@@ -96,5 +98,50 @@ final class CustomerTest extends TestCase
     {
         self::assertSame('1132345678', Phone::from('(11) 3234-5678')->value);
         self::assertSame('11987654321', Phone::from('11 98765-4321')->value);
+    }
+
+    public function test_updates_contact_keeping_name_and_document(): void
+    {
+        $customer = Customer::register('Maria', Document::from('52998224725'), Email::from('m@example.com'), Phone::from('1132345678'));
+
+        $customer->updateContact(Email::from('novo@example.com'), Phone::from('11987654321'));
+
+        self::assertSame('Maria', $customer->name());
+        self::assertSame('52998224725', $customer->document()->value);
+        self::assertSame('novo@example.com', $customer->email()->value);
+        self::assertSame('11987654321', $customer->phone()?->value);
+    }
+
+    public function test_deactivates_and_reactivates_customer(): void
+    {
+        $customer = Customer::register('Maria', Document::from('52998224725'), Email::from('m@example.com'));
+
+        $customer->deactivate();
+        self::assertFalse($customer->isActive());
+
+        $customer->activate();
+        self::assertTrue($customer->isActive());
+    }
+
+    public function test_rejects_revise_when_customer_is_inactive(): void
+    {
+        $customer = Customer::register('Maria', Document::from('52998224725'), Email::from('m@example.com'));
+        $customer->deactivate();
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage('Não é possível atualizar os dados de um cliente inativo.');
+
+        $customer->revise('Maria Nova', Document::from('52998224725'), Email::from('m@example.com'), null);
+    }
+
+    public function test_rejects_update_contact_when_customer_is_inactive(): void
+    {
+        $customer = Customer::register('Maria', Document::from('52998224725'), Email::from('m@example.com'));
+        $customer->deactivate();
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage('Não é possível atualizar o contato de um cliente inativo.');
+
+        $customer->updateContact(Email::from('novo@example.com'), null);
     }
 }

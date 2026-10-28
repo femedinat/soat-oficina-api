@@ -23,5 +23,5 @@ interface CustomerRepository
     public function delete(Customer $customer): void;
 
     /** @return Page<Customer> */
-    public function paginate(int $page, int $perPage): Page;
+    public function paginate(int $page, int $perPage, ?bool $onlyActive = null): Page;
 }

@@ -1,12 +1,26 @@
 # Documentação DDD
 
-| Artefato                                                        | Arquivo                                      | Link externo   |
-| --------------------------------------------------------------- | -------------------------------------------- | -------------- |
-| Event Storming (criação da OS, acompanhamento, peças e insumos) | `event-storming.pdf`                         | _link do Miro_ |
-| Diagramas (context map, agregados)                              | `diagramas.pdf`                              | _link do Miro_ |
-| Linguagem Ubíqua e glossário                                    | [`linguagem-ubiqua.md`](linguagem-ubiqua.md) | —              |
+| Artefato | Arquivo | Link externo |
+|---|---|---|
+| Event Storming (criação da OS, acompanhamento, clientes, veículos, serviços, peças e insumos) | [`event-storming.pdf`](event-storming.pdf) | _link do Miro_ |
+| Diagramas (context map, agregados, C4 — páginas 2–4 e 10–13) | [`event-storming.pdf`](event-storming.pdf) | _link do Miro_ |
+| Linguagem Ubíqua e glossário | [`linguagem-ubiqua.md`](linguagem-ubiqua.md) | — |
 
 > ⚠️ O board do Miro precisa estar com acesso "qualquer pessoa com o link pode ver".
+
+---
+
+## Event Storming por Agregado (`docs/ddd/event-storming/`)
+
+Para facilitar a leitura, manutenção modular pela equipe e rastreabilidade direta com o código:
+
+| Agregado | Contexto | Documentação Detalhada |
+|---|---|---|
+| **Veículo** | Clientes e Veículos (`src/Customer`) | [`event-storming/veiculo.md`](event-storming/veiculo.md) |
+| **Cliente** | Clientes e Veículos (`src/Customer`) | [`event-storming/cliente.md`](event-storming/cliente.md) |
+| **Ordem de Serviço (OS)** | Atendimento (`src/ServiceOrder`) | _Em elaboração pelo grupo (Página 5 do PDF)_ |
+| **Peça / Insumo** | Estoque (`src/Inventory`) | _Em elaboração pelo grupo (Página 9 do PDF)_ |
+| **Serviço** | Catálogo (`src/Catalog`) | _Em elaboração pelo grupo (Página 14 do PDF)_ |
 
 ---
 
@@ -25,7 +39,7 @@
 
 ## 2. Camadas e Arquitetura Limpa (por contexto)
 
-```
+```text
 src/<Contexto>/
 ├── Domain/          # Entidades, VOs, agregados, eventos, interfaces de repositório. ZERO dependência do Laravel.
 ├── Application/     # Casos de uso (commands/handlers), DTOs, orquestração de transações.
@@ -58,27 +72,24 @@ Contém conceitos e estruturas compartilhadas entre diferentes contextos:
 - **`Page`** (`src/Shared/Application/Page.php`):
   - Estrutura tipada de paginação agnóstica de framework para tráfego entre Aplicação e Interfaces.
 
-### 3.2. Bounded Context: Clientes (`src/Customer/`)
-Responsável pelo ciclo de vida das pessoas físicas e jurídicas atendidas pela oficina:
+### 3.2. Bounded Context: Clientes e Veículos (`src/Customer/`)
+Responsável pelo ciclo de vida das pessoas físicas e jurídicas atendidas pela oficina e seus veículos:
 - **Domínio (`src/Customer/Domain/`)**:
-  - **`Customer`**: Agregado raiz que encapsula identidade (`CustomerId`), nome, documento (`Document`), e-mail (`Email`) e telefone opcional (`Phone`). Protege invariantes como tamanho de nome e higienização.
+  - **`Customer`**: Agregado raiz que encapsula identidade (`CustomerId`), nome, documento (`Document`), e-mail (`Email`), telefone opcional (`Phone`) e status ativo (`active`). Protege invariantes como tamanho de nome, higienização e bloqueio de edições em clientes inativos.
   - **`CustomerId`**: Identidade do agregado baseada em UUID v4 gerado no domínio.
   - **`Phone`**: Value Object para telefones brasileiros com DDD (10 ou 11 dígitos numéricos).
+  - **`CustomerContactNotifier`**: Porta de saída para envio de confirmação de atualização de contato por e-mail.
   - **`CustomerRepository`**: Interface com operações de persistência e consulta (`save`, `findById`, `findByDocument`, `delete`, `paginate`).
+  - **`Vehicle`**: Agregado raiz que encapsula placa (`LicensePlate`), marca, modelo, ano, cor, quilometragem (`mileage`), proprietário (`customerId`) e status ativo (`active`).
 - **Aplicação (`src/Customer/Application/`)**:
-  - **`RegisterCustomer`**: Valida a unicidade de documento, instancia a entidade e persiste.
-  - **`UpdateCustomer`**: Atualiza dados garantindo que novo documento não colida com outro cliente.
-  - **`FindCustomer`**: Consulta por ID com conversão de `CustomerId`.
-  - **`ListCustomers`**: Listagem paginada com suporte a filtro por documento CPF/CNPJ e limite máximo de 100 itens.
-  - **`DeleteCustomer`**: Exclusão lógica (*soft delete*) preservando histórico de veículos e ordens de serviço.
-  - **`CustomerInput` & `CustomerView`**: DTOs desacoplados dos contratos HTTP.
+  - **`RegisterCustomer`**, **`UpdateCustomer`**, **`UpdateCustomerContact`**, **`FindCustomer`**, **`FindCustomerByDocument`**, **`ListCustomers`**, **`DeactivateCustomer`**, **`ActivateCustomer`**, **`DeleteCustomer`**.
+  - **`CreateVehicleUseCase`**, **`UpdateVehicleUseCase`**, **`RegisterVehicleMileageUseCase`**, **`GetVehicleByIdUseCase`**, **`GetVehicleByLicensePlateUseCase`**, **`ListVehiclesUseCase`**, **`TransferVehicleOwnershipUseCase`**, **`DeactivateVehicleUseCase`**, **`ActivateVehicleUseCase`**.
 - **Infraestrutura (`src/Customer/Infrastructure/`)**:
-  - **`CustomerModel`**: Model Eloquent mapeando a tabela `customers` com trait `SoftDeletes`.
-  - **`EloquentCustomerRepository`**: Implementação concreta da interface `CustomerRepository`. Trata `UniqueConstraintViolationException` para resguardar concorrência.
+  - **`CustomerModel`** & **`EloquentCustomerRepository`**, **`LaravelMailCustomerContactNotifier`**.
+  - **`VehicleModel`** & **`EloquentVehicleRepository`**.
 - **Interfaces (`src/Customer/Interfaces/Http/`)**:
-  - **`CustomerController`**: Controller RESTful fino.
-  - **`CustomerRequest`**: FormRequest para validação sintática do payload HTTP.
-  - **`CustomerResource`**: Formatação padronizada JSON da resposta.
+  - **`CustomerController`**, **`CustomerRequest`**, **`UpdateCustomerContactRequest`**, **`CustomerResource`**.
+  - **`VehicleController`**, **`StoreVehicleRequest`**, **`UpdateVehicleRequest`**, **`RegisterVehicleMileageRequest`**, **`TransferVehicleOwnershipRequest`**, **`VehicleResource`**.
 
 ### 3.3. Bounded Context: Identidade e Acesso (`src/Identity/`)
 Responsável pela segurança, controle de acesso e usuários do sistema:
@@ -115,6 +126,7 @@ Responsável pela segurança, controle de acesso e usuários do sistema:
 - `document` (VARCHAR 14, UNIQUE): CPF ou CNPJ normalizado.
 - `email` (VARCHAR 254): E-mail normalizado.
 - `phone` (VARCHAR 11, NULLABLE): Telefone contendo apenas dígitos (DDD + número).
+- `active` (BOOLEAN, DEFAULT true): Status ativo/inativo do cliente.
 - `created_at`, `updated_at`, `deleted_at`: Timestamps padrão com suporte a *Soft Delete*.
 
 ### 4.2. Tabela `users`

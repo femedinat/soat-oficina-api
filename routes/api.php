@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
+use Oficina\Customer\Interfaces\Http\Controller\VehicleController;
 use Oficina\Customer\Interfaces\Http\CustomerController;
 use Oficina\Identity\Interfaces\Http\AuthController;
 use Oficina\Identity\Interfaces\Http\UserController;
@@ -19,15 +20,36 @@ Route::prefix('auth')->group(function (): void {
 });
 
 Route::middleware('auth:api')->group(function (): void {
-    Route::apiResource('customers', CustomerController::class)
-        ->only(['index', 'show'])
-        ->middleware('role:administrator,mechanic')
-        ->parameters(['customers' => 'customer']);
+    Route::middleware('role:administrator,mechanic')->group(function (): void {
+        Route::get('customers/document/{document}', [CustomerController::class, 'showByDocument'])
+            ->where('document', '.*');
+        Route::apiResource('customers', CustomerController::class)
+            ->only(['index', 'show'])
+            ->parameters(['customers' => 'customer']);
 
-    Route::apiResource('customers', CustomerController::class)
-        ->only(['store', 'update', 'destroy'])
-        ->middleware('role:administrator')
-        ->parameters(['customers' => 'customer']);
+        Route::prefix('vehicles')->group(function (): void {
+            Route::get('/', [VehicleController::class, 'index']);
+            Route::get('/plate/{plate}', [VehicleController::class, 'showByLicensePlate']);
+            Route::get('/{id}', [VehicleController::class, 'show'])->whereUuid('id');
+        });
+    });
+
+    Route::middleware('role:administrator')->group(function (): void {
+        Route::patch('customers/{customer}/contact', [CustomerController::class, 'updateContact']);
+        Route::patch('customers/{customer}/activate', [CustomerController::class, 'activate']);
+        Route::apiResource('customers', CustomerController::class)
+            ->only(['store', 'update', 'destroy'])
+            ->parameters(['customers' => 'customer']);
+
+        Route::prefix('vehicles')->group(function (): void {
+            Route::post('/', [VehicleController::class, 'store']);
+            Route::put('/{id}', [VehicleController::class, 'update'])->whereUuid('id');
+            Route::patch('/{id}/mileage', [VehicleController::class, 'registerMileage'])->whereUuid('id');
+            Route::patch('/{id}/transfer', [VehicleController::class, 'transferOwnership'])->whereUuid('id');
+            Route::patch('/{id}/activate', [VehicleController::class, 'activate'])->whereUuid('id');
+            Route::delete('/{id}', [VehicleController::class, 'destroy'])->whereUuid('id');
+        });
+    });
 
     Route::post('users', [UserController::class, 'store'])->middleware('role:administrator');
 

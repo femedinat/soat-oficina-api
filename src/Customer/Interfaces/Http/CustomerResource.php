@@ -13,7 +13,7 @@ use Oficina\Customer\Application\CustomerView;
 final class CustomerResource extends JsonResource
 {
     /**
-     * @return array{id: string, name: string, document_type: string, document: string, email: string, phone: string|null}
+     * @return array{id: string, name: string, document_type: string, document: string, email: string, phone: string|null, active: bool}
      */
     public function toArray($request): array
     {
@@ -25,6 +25,7 @@ final class CustomerResource extends JsonResource
             'document' => $this->resource->document,
             'email' => $this->resource->email,
             'phone' => $this->resource->phone,
+            'active' => $this->resource->active,
         ];
     }
 }
