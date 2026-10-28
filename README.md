@@ -10,7 +10,7 @@ MVP do back-end de uma oficina mecânica de médio porte: gestão de **ordens de
 pelo cliente e aprovação de orçamento via API.
 
 ## Solução
-_Resumo da solução (preencher)._
+API RESTful construída em **PHP 8.4** e **Laravel 13** utilizando arquitetura em camadas orientada a **Domain-Driven Design (DDD)**. O sistema separa estritamente as regras de negócio puras (`Domain`) da orquestração de casos de uso (`Application`), persistência transacional em PostgreSQL (`Infrastructure`) e exposição HTTP/OpenAPI (`Interfaces`), garantindo alta testabilidade, validações de domínio ricas (CPF/CNPJ, placas padrão antigo e Mercosul, ciclo de vida de veículos e ordens de serviço) e documentação interativa gerada automaticamente via Scramble.
 
 ## Arquitetura
 Monólito modular em camadas orientado a **Domain-Driven Design**:
@@ -36,27 +36,108 @@ sem dependência do Laravel. Detalhes em [docs/ddd](docs/ddd/README.md).
 | Infra | Docker, Docker Compose, Nginx, GitHub Actions |
 
 ## Pré-requisitos
-- Docker 24+ e Docker Compose v2
-- `make` (Linux/macOS nativo; no Windows use **WSL2**)
-- Nenhum PHP/Composer local é necessário
+- **Docker 24+** e **Docker Compose v2**
+- Opcional: `make` (nativo no Linux/macOS ou via **WSL2** no Windows)
+- Opcional (para rodar fora do container): **PHP 8.4+** (com extensão `pdo_pgsql`) e **Composer 2+** (ex.: Laravel Herd)
 
-## Execução local
+## Execução local (Passo a Passo)
+
+### Opção 1 — Linux, macOS ou Windows (WSL2) com `make`
 ```bash
-git clone https://github.com/OWNER/REPO.git && cd REPO
-make setup      # sobe containers, instala deps, gera chaves, migra e popula o banco
+git clone https://github.com/OWNER/REPO.git && cd soat-oficina-api
+make setup      # copia .env, sobe containers, instala deps, gera chaves, migra e popula o banco
 ```
-API: http://localhost:8080 · `make help` lista todos os comandos.
+API: http://localhost:8080 · `make help` lista todos os comandos disponíveis.
 
-## Testes
+### Opção 2 — Windows (PowerShell) com Docker Compose (sem `make`)
+```powershell
+# 1. Criar o arquivo .env a partir do exemplo
+Copy-Item .env.example .env
+
+# 2. Construir e subir os containers (app, web e db)
+docker compose up -d --build
+
+# 3. Instalar dependências, gerar chaves e rodar as migrations
+docker compose exec app composer install --no-interaction
+docker compose exec app php artisan key:generate
+docker compose exec app php artisan jwt:secret --force
+docker compose exec app php artisan migrate --seed
+```
+API disponível em: http://localhost:8080
+
+### Opção 3 — PHP Local (ex.: Laravel Herd) + PostgreSQL no Docker
+Se preferir rodar comandos `php artisan` diretamente no terminal do sistema operacional usando apenas o banco de dados no Docker:
+
+1. Copie o `.env.example` para `.env` e ajuste o `DB_HOST` de `db` para `127.0.0.1`:
+   ```env
+   DB_CONNECTION=pgsql
+   DB_HOST=127.0.0.1
+   DB_PORT=5432
+   DB_DATABASE=oficina
+   DB_USERNAME=oficina
+   DB_PASSWORD=oficina
+   ```
+2. Suba o container do PostgreSQL (ele já cria automaticamente os bancos `oficina` e `oficina_test`):
+   ```powershell
+   docker compose up -d db
+   ```
+3. Instale as dependências, gere as chaves e execute as migrations localmente:
+   ```powershell
+   composer install
+   php artisan key:generate
+   php artisan jwt:secret --force
+   php artisan migrate --seed
+   ```
+4. Suba o servidor local:
+   ```powershell
+   php artisan serve --port=8080
+   ```
+
+## Testes e Qualidade de Código
+
+### Com `make` (Linux/macOS/WSL2)
 ```bash
-make test       # unitários + integração
+make test       # unitários + integração + feature
 make coverage   # com gate de cobertura mínima de 80% sobre src/
-make check      # tudo que o CI roda
+make check      # tudo que o CI roda (lint + stan + coverage + audit)
+```
+
+### Sem `make` (Docker Compose / PowerShell)
+```powershell
+# Rodar suíte de testes
+docker compose exec app php artisan test
+
+# Rodar testes com cobertura mínima de 80% (via PCOV no container)
+docker compose exec app php artisan test --coverage --min=80
+
+# Verificar estilo de código (Laravel Pint) e análise estática (Larastan)
+docker compose exec app ./vendor/bin/pint --test
+docker compose exec app ./vendor/bin/phpstan analyse --memory-limit=1G
+```
+
+### Com PHP Local (com `DB_HOST=127.0.0.1` no `.env` e container `db` rodando)
+```powershell
+php artisan test
+./vendor/bin/pint --test
+./vendor/bin/phpstan analyse --memory-limit=1G
 ```
 
 ## Documentação da API
 - Swagger UI: http://localhost:8080/docs/api
 - OpenAPI JSON: http://localhost:8080/docs/api.json
+
+### Endpoints — Veículos (`/api/vehicles`)
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/vehicles` | Lista veículos (filtros opcionais: `customer_id`, `only_active`) |
+| `POST` | `/api/vehicles` | Cadastra um novo veículo (valida placa antiga/Mercosul e unicidade) |
+| `GET` | `/api/vehicles/{id}` | Consulta veículo por UUID |
+| `GET` | `/api/vehicles/plate/{plate}` | Consulta veículo por placa |
+| `PUT` | `/api/vehicles/{id}` | Atualiza dados cadastrais do veículo |
+| `PATCH` | `/api/vehicles/{id}/mileage` | Registra evolução de quilometragem do veículo |
+| `PATCH` | `/api/vehicles/{id}/transfer` | Transfere propriedade do veículo para outro cliente |
+| `PATCH` | `/api/vehicles/{id}/activate` | Reativa um veículo inativo |
+| `DELETE` | `/api/vehicles/{id}` | Inativa um veículo preservando seu histórico |
 
 ## Banco de dados: por que PostgreSQL
 Domínio transacional com reserva/baixa de estoque concorrente → ACID, `SELECT ... FOR UPDATE`,

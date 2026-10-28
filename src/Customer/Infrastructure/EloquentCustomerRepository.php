@@ -25,6 +25,7 @@ final class EloquentCustomerRepository implements CustomerRepository
             'document' => $customer->document()->value,
             'email' => $customer->email()->value,
             'phone' => $customer->phone()?->value,
+            'active' => $customer->isActive(),
         ]);
 
         try {
@@ -54,10 +55,16 @@ final class EloquentCustomerRepository implements CustomerRepository
         CustomerModel::query()->whereKey($customer->id->value)->delete();
     }
 
-    public function paginate(int $page, int $perPage): Page
+    public function paginate(int $page, int $perPage, ?bool $onlyActive = null): Page
     {
-        $total = CustomerModel::query()->count();
-        $models = CustomerModel::query()
+        $query = CustomerModel::query();
+
+        if ($onlyActive !== null) {
+            $query->where('active', $onlyActive);
+        }
+
+        $total = (clone $query)->count();
+        $models = $query
             ->orderBy('name')
             ->orderBy('id')
             ->forPage($page, $perPage)
@@ -79,6 +86,7 @@ final class EloquentCustomerRepository implements CustomerRepository
             Document::from($model->document),
             Email::from($model->email),
             $model->phone === null ? null : Phone::from($model->phone),
+            (bool) $model->active,
         );
     }
 }
