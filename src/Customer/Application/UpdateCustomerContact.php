@@ -24,6 +24,7 @@ final readonly class UpdateCustomerContact
     public function execute(string $id, CustomerContactInput $input): CustomerView
     {
         $customer = $this->customers->findById(CustomerId::from($id)) ?? throw new CustomerNotFoundException;
+        $previousEmail = $customer->email();
 
         $customer->updateContact(
             Email::from($input->email),
@@ -31,7 +32,7 @@ final readonly class UpdateCustomerContact
         );
 
         $this->customers->save($customer);
-        $this->notifier->sendContactUpdatedConfirmation($customer);
+        $this->notifier->sendContactUpdatedConfirmation($customer, $previousEmail);
 
         return CustomerView::fromEntity($customer);
     }
