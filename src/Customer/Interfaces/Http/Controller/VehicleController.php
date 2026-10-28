@@ -10,10 +10,10 @@ use Dedoc\Scramble\Attributes\PathParameter;
 use Dedoc\Scramble\Attributes\QueryParameter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Oficina\Customer\Application\DTO\CreateVehicleInputDto;
 use Oficina\Customer\Application\DTO\UpdateVehicleInputDto;
+use Oficina\Customer\Application\DTO\VehicleOutputDto;
 use Oficina\Customer\Application\UseCase\ActivateVehicleUseCase;
 use Oficina\Customer\Application\UseCase\CreateVehicleUseCase;
 use Oficina\Customer\Application\UseCase\DeactivateVehicleUseCase;
@@ -34,22 +34,33 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 final class VehicleController extends Controller
 {
     /**
-     * Lista veículos cadastrados (com filtro opcional por cliente e status ativo).
+     * Lista veículos cadastrados (paginado, com filtro opcional por cliente e status ativo).
+     *
+     * @response array{data: list<array{id: string, customer_id: string|null, license_plate: string, is_mercosul: bool, brand: string, model: string, year: int, color: string|null, mileage: int, active: bool}>, meta: array{page: int, per_page: int, total: int, last_page: int}}
      */
     #[QueryParameter('customer_id', description: 'Filtra veículos pelo UUID do cliente proprietário.', type: 'string', format: 'uuid', example: '0195f3a0-1234-7000-8000-000000000001')]
     #[QueryParameter('only_active', description: 'Filtra pelo status do veículo: true para apenas ativos, false para apenas inativos, ou vazio/omitido para retornar todos.', type: 'boolean', example: true)]
-    public function index(Request $request, ListVehiclesUseCase $useCase): AnonymousResourceCollection
+    #[QueryParameter('page', description: 'Número da página.', type: 'integer', example: 1)]
+    #[QueryParameter('per_page', description: 'Quantidade de itens por página (máximo 100).', type: 'integer', example: 15)]
+    public function index(Request $request, ListVehiclesUseCase $useCase): JsonResponse
     {
-        /** @var array{customer_id?: string|null} $validated */
+        /** @var array{customer_id?: string|null, page?: int|string, per_page?: int|string} $validated */
         $validated = $request->validate(
             rules: [
                 'customer_id' => ['nullable', 'uuid'],
+                'page' => ['sometimes', 'integer', 'min:1'],
+                'per_page' => ['sometimes', 'integer', 'min:1', 'max:'.ListVehiclesUseCase::MAX_PER_PAGE],
             ],
             messages: [
                 'uuid' => 'O campo :attribute deve ser um UUID válido.',
+                'integer' => 'O campo :attribute deve ser um número inteiro.',
+                'min.numeric' => 'O campo :attribute deve ser no mínimo :min.',
+                'max.numeric' => 'O campo :attribute não pode ser maior do que :max.',
             ],
             attributes: [
                 'customer_id' => 'identificador do cliente',
+                'page' => 'página',
+                'per_page' => 'itens por página',
             ],
         );
 
@@ -58,12 +69,25 @@ final class VehicleController extends Controller
             ? $request->boolean('only_active')
             : null;
 
-        $vehicles = $useCase->execute(
+        $result = $useCase->execute(
+            page: (int) ($validated['page'] ?? 1),
+            perPage: (int) ($validated['per_page'] ?? 15),
             customerId: $customerId,
             onlyActive: $onlyActive,
         );
 
-        return VehicleResource::collection($vehicles);
+        return response()->json([
+            'data' => array_map(
+                static fn (VehicleOutputDto $dto): array => (new VehicleResource($dto))->toArray($request),
+                $result->items,
+            ),
+            'meta' => [
+                'page' => $result->page,
+                'per_page' => $result->perPage,
+                'total' => $result->total,
+                'last_page' => $result->lastPage(),
+            ],
+        ]);
     }
 
     /**

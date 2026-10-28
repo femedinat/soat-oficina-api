@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Oficina\Customer\Domain\Exception;
 
-use Oficina\Shared\Domain\Exception\DomainException;
+use Oficina\Shared\Domain\Exception\ConflictException;
 
-final class VehicleAlreadyExistsException extends DomainException
+final class VehicleAlreadyExistsException extends ConflictException
 {
     public static function withLicensePlate(string $licensePlate): self
     {

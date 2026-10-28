@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Oficina\Customer\Domain\Repository;
 
 use Oficina\Customer\Domain\Entity\Vehicle;
+use Oficina\Shared\Application\Page;
 use Oficina\Shared\Domain\ValueObject\LicensePlate;
 
 interface VehicleRepositoryInterface
@@ -16,14 +17,9 @@ interface VehicleRepositoryInterface
     public function findByLicensePlate(LicensePlate $licensePlate): ?Vehicle;
 
     /**
-     * @return list<Vehicle>
+     * @return Page<Vehicle>
      */
-    public function findByCustomerId(string $customerId, ?bool $onlyActive = null): array;
-
-    /**
-     * @return list<Vehicle>
-     */
-    public function findAll(?bool $onlyActive = null): array;
+    public function paginate(int $page, int $perPage, ?string $customerId = null, ?bool $onlyActive = null): Page;
 
     public function existsByLicensePlate(LicensePlate $licensePlate, ?string $excludeId = null): bool;
 }

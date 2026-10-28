@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Oficina\Customer\Infrastructure\Persistence\Eloquent;
 
+use Illuminate\Database\UniqueConstraintViolationException;
 use Oficina\Customer\Domain\Entity\Vehicle;
+use Oficina\Customer\Domain\Exception\VehicleAlreadyExistsException;
 use Oficina\Customer\Domain\Repository\VehicleRepositoryInterface;
+use Oficina\Shared\Application\Page;
 use Oficina\Shared\Domain\ValueObject\LicensePlate;
 
 final class EloquentVehicleRepository implements VehicleRepositoryInterface
@@ -34,7 +37,11 @@ final class EloquentVehicleRepository implements VehicleRepositoryInterface
             'active' => $vehicle->isActive(),
         ]);
 
-        $model->save();
+        try {
+            $model->save();
+        } catch (UniqueConstraintViolationException) {
+            throw VehicleAlreadyExistsException::withLicensePlate($vehicle->licensePlate()->value);
+        }
 
         return $this->toDomain($model);
     }
@@ -56,42 +63,32 @@ final class EloquentVehicleRepository implements VehicleRepositoryInterface
     }
 
     /**
-     * @return list<Vehicle>
+     * @return Page<Vehicle>
      */
-    public function findByCustomerId(string $customerId, ?bool $onlyActive = null): array
-    {
-        $query = VehicleModel::query()->where('customer_id', $customerId);
-
-        if ($onlyActive !== null) {
-            $query->where('active', $onlyActive);
-        }
-
-        /** @var list<VehicleModel> $models */
-        $models = $query->orderBy('created_at', 'desc')->get()->all();
-
-        return array_map(
-            fn (VehicleModel $model): Vehicle => $this->toDomain($model),
-            $models,
-        );
-    }
-
-    /**
-     * @return list<Vehicle>
-     */
-    public function findAll(?bool $onlyActive = null): array
+    public function paginate(int $page, int $perPage, ?string $customerId = null, ?bool $onlyActive = null): Page
     {
         $query = VehicleModel::query();
 
+        if ($customerId !== null) {
+            $query->where('customer_id', $customerId);
+        }
+
         if ($onlyActive !== null) {
             $query->where('active', $onlyActive);
         }
 
-        /** @var list<VehicleModel> $models */
-        $models = $query->orderBy('created_at', 'desc')->get()->all();
+        $total = (clone $query)->count();
+        $models = $query
+            ->orderBy('created_at', 'desc')
+            ->orderBy('id')
+            ->forPage($page, $perPage)
+            ->get();
 
-        return array_map(
-            fn (VehicleModel $model): Vehicle => $this->toDomain($model),
-            $models,
+        return new Page(
+            $models->map(fn (VehicleModel $model): Vehicle => $this->toDomain($model))->values()->all(),
+            $total,
+            $page,
+            $perPage,
         );
     }
 

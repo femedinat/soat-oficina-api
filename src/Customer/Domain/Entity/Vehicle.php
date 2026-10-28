@@ -74,6 +74,10 @@ final class Vehicle
         ?string $color = null,
         ?LicensePlate $licensePlate = null,
     ): void {
+        if (! $this->active) {
+            throw new DomainException('Não é possível atualizar os dados de um veículo inativo.');
+        }
+
         $this->brand = self::validateBrand($brand);
         $this->model = self::validateModel($model);
         self::validateYear($year);
