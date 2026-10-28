@@ -26,6 +26,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias(['role' => RequireRole::class]);
+
+        // API sem sessão nem tela de login: visitante sem token recebe 401 JSON, nunca redirect (evitava 500 "Route [login] not defined").
+        $middleware->redirectGuestsTo(static fn (Request $request): ?string => $request->is('api/*') ? null : '/');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
