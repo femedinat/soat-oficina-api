@@ -15,7 +15,7 @@ return new class extends Migration
     {
         Schema::create('vehicles', function (Blueprint $table): void {
             $table->uuid('id')->primary();
-            $table->uuid('customer_id')->nullable()->index();
+            $table->foreignUuid('customer_id')->nullable()->index()->constrained('customers');
             $table->string('license_plate', 7)->unique();
             $table->string('brand', 100);
             $table->string('model', 100);

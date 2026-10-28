@@ -17,7 +17,6 @@ return new class extends Migration
             $table->string('document', 14)->unique();
             $table->string('email', 254);
             $table->string('phone', 11)->nullable();
-            $table->boolean('active')->default(true)->index();
             $table->timestamps();
             $table->softDeletes();
         });
