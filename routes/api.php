@@ -3,11 +3,14 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
+use Oficina\Catalog\Interfaces\Http\ServiceController;
 use Oficina\Customer\Interfaces\Http\Controller\VehicleController;
 use Oficina\Customer\Interfaces\Http\CustomerController;
 use Oficina\Identity\Interfaces\Http\AuthController;
 use Oficina\Identity\Interfaces\Http\UserController;
 use Oficina\Inventory\Interfaces\Http\InventoryItemController;
+use Oficina\ServiceOrder\Interfaces\Http\ServiceOrderController;
+use Oficina\ServiceOrder\Interfaces\Http\TrackServiceOrderController;
 
 Route::prefix('auth')->group(function (): void {
     Route::post('login', [AuthController::class, 'login'])->middleware('throttle:10,1');
@@ -18,6 +21,11 @@ Route::prefix('auth')->group(function (): void {
         Route::post('logout', [AuthController::class, 'logout']);
     });
 });
+
+// Acompanhamento público da OS: número da OS + CPF/CNPJ, sem login, com limite por IP contra enumeração.
+Route::get('public/service-orders/{order}', TrackServiceOrderController::class)
+    ->whereUuid('order')
+    ->middleware('throttle:20,1');
 
 Route::middleware('auth:api')->group(function (): void {
     Route::middleware('role:administrator,mechanic')->group(function (): void {
@@ -70,6 +78,59 @@ Route::middleware('auth:api')->group(function (): void {
             Route::get('{part}/movements', 'movements');
             Route::patch('{part}/activate', 'activate');
             Route::delete('{part}', 'destroy');
+        });
+    });
+
+    // Catálogo de serviços: todos os perfis consultam; administrador cadastra e altera.
+    Route::prefix('services')->controller(ServiceController::class)->whereUuid(['service', 'part'])->group(function (): void {
+        Route::middleware('role:administrator,mechanic,customer')->group(function (): void {
+            Route::get('/', 'index');
+            Route::get('{service}', 'show');
+        });
+
+        Route::middleware('role:administrator')->group(function (): void {
+            Route::post('/', 'store');
+            Route::put('{service}', 'update');
+            Route::patch('{service}/price', 'changePrice');
+            Route::patch('{service}/estimated-time', 'adjustEstimatedTime');
+            Route::put('{service}/standard-parts', 'linkPart');
+            Route::delete('{service}/standard-parts/{part}', 'unlinkPart');
+            Route::patch('{service}/activate', 'activate');
+            Route::delete('{service}', 'destroy');
+        });
+    });
+
+    // Ordem de Serviço: oficina conduz o fluxo; o cliente acompanha e decide só as próprias OS.
+    Route::prefix('service-orders')->controller(ServiceOrderController::class)->whereUuid(['order', 'line'])->group(function (): void {
+        Route::get('metrics/execution-time', 'executionTime')->middleware('role:administrator');
+
+        Route::middleware('role:administrator,mechanic,customer')->group(function (): void {
+            Route::get('/', 'index');
+            Route::get('{order}', 'show');
+        });
+
+        Route::middleware('role:administrator,customer')->group(function (): void {
+            Route::post('{order}/budget/approve', 'approve');
+            Route::post('{order}/budget/reject', 'reject');
+            Route::post('{order}/additional-repairs/authorize', 'authorizeAdditional');
+            Route::post('{order}/additional-repairs/refuse', 'refuseAdditional');
+        });
+
+        Route::middleware('role:administrator,mechanic')->group(function (): void {
+            Route::post('{order}/services', 'addService');
+            Route::delete('{order}/services/{line}', 'removeService');
+            Route::post('{order}/parts', 'addPart');
+            Route::delete('{order}/parts/{line}', 'removePart');
+            Route::post('{order}/budget/send', 'sendBudget');
+            Route::post('{order}/budget/return-to-diagnosis', 'returnToDiagnosis');
+            Route::post('{order}/additional-repairs', 'requestAdditionalRepair');
+            Route::post('{order}/finish', 'finish');
+        });
+
+        Route::middleware('role:administrator')->group(function (): void {
+            Route::post('/', 'store');
+            Route::post('{order}/deliver', 'deliver');
+            Route::post('{order}/cancel', 'cancel');
         });
     });
 });
