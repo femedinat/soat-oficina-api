@@ -8,6 +8,7 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Connection;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\ServiceProvider;
+use Oficina\Shared\Application\Clock;
 use Oficina\Shared\Application\EventPublisher;
 use Oficina\Shared\Application\TransactionManager;
 
@@ -15,6 +16,7 @@ final class SharedServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->singleton(Clock::class, SystemClock::class);
         $this->app->bind(
             TransactionManager::class,
             fn ($app): TransactionManager => new DatabaseTransactionManager($app->make(ConnectionInterface::class)),
