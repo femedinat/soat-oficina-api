@@ -1,0 +1,23 @@
+Evidência copiada do log do job "Análise de vulnerabilidades"
+Execução: https://github.com/femedinat/soat-oficina-api/actions/runs/40963293165
+Commit: 3f6511cab90b42865100561b75483a52424f054b (PR #19, branch feat/services-and-service-orders)
+Data: 2026-10-29
+
+== Trivy 0.70.0 — trivy fs . (scanners: vuln,secret; severidade CRITICAL) ==
+
+Report Summary
+
+┌───────────────┬──────────┬─────────────────┬─────────┐
+│    Target     │   Type   │ Vulnerabilities │ Secrets │
+├───────────────┼──────────┼─────────────────┼─────────┤
+│ composer.lock │ composer │        0        │    -    │
+└───────────────┴──────────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+Nenhum segredo encontrado no repositório (o Trivy só lista alvos com achados de segredo).
+
+== composer audit (job "Lint & análise estática", mesmo commit) ==
+
+No security vulnerability advisories found.
