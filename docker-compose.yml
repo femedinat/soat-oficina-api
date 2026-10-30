@@ -16,6 +16,24 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Agendador do Laravel: roda o job do prazo de 48 h da OS (service-orders:expire-approvals).
+  # Reinicia sozinho até o `composer install` do app ter criado a pasta vendor.
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      target: dev
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    command: ["php", "artisan", "schedule:work"]
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
   web:
     image: nginx:1.27-alpine
     ports:

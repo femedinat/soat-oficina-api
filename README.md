@@ -139,6 +139,60 @@ php artisan test
 | `PATCH` | `/api/vehicles/{id}/activate` | Reativa um veículo inativo |
 | `DELETE` | `/api/vehicles/{id}` | Inativa um veículo preservando seu histórico |
 
+### Endpoints — Peças e insumos (`/api/parts`)
+| Método | Rota | Descrição | Perfis |
+|---|---|---|---|
+| `GET` | `/api/parts` | Lista o catálogo com saldo físico, reservado e disponível | Admin, Mecânico |
+| `GET` | `/api/parts/restock` | Itens no estoque mínimo ou abaixo | Admin, Mecânico |
+| `GET` | `/api/parts/{id}` | Consulta peça/insumo | Admin, Mecânico |
+| `POST` | `/api/parts` | Cadastra com estoque inicial | Admin |
+| `PUT` | `/api/parts/{id}` | Atualiza dados | Admin |
+| `PATCH` | `/api/parts/{id}/price` | Altera o preço de venda | Admin |
+| `POST` | `/api/parts/{id}/receipts` | Registra entrada de estoque | Admin |
+| `POST` | `/api/parts/{id}/adjustments` | Ajusta o estoque (inventário) | Admin |
+| `GET` | `/api/parts/{id}/movements` | Extrato de movimentações | Admin |
+| `DELETE` / `PATCH` | `/api/parts/{id}` / `/api/parts/{id}/activate` | Inativa / reativa | Admin |
+
+### Endpoints — Serviços (`/api/services`)
+| Método | Rota | Descrição | Perfis |
+|---|---|---|---|
+| `GET` | `/api/services` | Catálogo (busca `search`, filtro `category`, `include_inactive`) | Todos |
+| `GET` | `/api/services/{id}` | Consulta serviço | Todos |
+| `POST` | `/api/services` | Cadastra (código e nome únicos) | Admin |
+| `PUT` | `/api/services/{id}` | Atualiza nome, descrição e categoria | Admin |
+| `PATCH` | `/api/services/{id}/price` | Altera o preço da mão de obra (OS já orçadas mantêm o preço) | Admin |
+| `PATCH` | `/api/services/{id}/estimated-time` | Ajusta o tempo estimado | Admin |
+| `PUT` | `/api/services/{id}/standard-parts` | Vincula peça padrão (ou atualiza a quantidade) | Admin |
+| `DELETE` | `/api/services/{id}/standard-parts/{partId}` | Desvincula peça padrão | Admin |
+| `DELETE` / `PATCH` | `/api/services/{id}` / `/api/services/{id}/activate` | Inativa / reativa | Admin |
+
+### Endpoints — Ordens de Serviço (`/api/service-orders`)
+| Método | Rota | Descrição | Perfis |
+|---|---|---|---|
+| `POST` | `/api/service-orders` | Abre a OS pelo CPF/CNPJ e placa (cadastra o veículo se for novo) | Admin |
+| `GET` | `/api/service-orders` | Lista (filtros `status`, `customer_id`, `vehicle_id`) | Admin, Mecânico, Cliente (só as dele) |
+| `GET` | `/api/service-orders/{id}` | Detalhe com itens, orçamento e histórico | Admin, Mecânico, Cliente (só as dele) |
+| `POST` | `/api/service-orders/{id}/services` | Adiciona serviço e sugere as peças padrão | Admin, Mecânico |
+| `POST` | `/api/service-orders/{id}/parts` | Adiciona peça/insumo (bloqueia sem estoque) | Admin, Mecânico |
+| `DELETE` | `/api/service-orders/{id}/services/{linha}` e `/parts/{linha}` | Remove item no diagnóstico | Admin, Mecânico |
+| `POST` | `/api/service-orders/{id}/budget/send` | Envia o orçamento (prazo de 48 h, e-mail ao cliente) | Admin, Mecânico |
+| `POST` | `/api/service-orders/{id}/budget/return-to-diagnosis` | Devolve o orçamento ao diagnóstico | Admin, Mecânico |
+| `POST` | `/api/service-orders/{id}/budget/approve` | Aprova (reserva estoque e inicia a execução) | Cliente (dono), Admin |
+| `POST` | `/api/service-orders/{id}/budget/reject` | Rejeita (OS cancelada) | Cliente (dono), Admin |
+| `POST` | `/api/service-orders/{id}/additional-repairs` | Solicita reparo adicional durante a execução | Admin, Mecânico |
+| `POST` | `/api/service-orders/{id}/additional-repairs/authorize` | Autoriza o reparo (reserva as peças extras) | Cliente (dono), Admin |
+| `POST` | `/api/service-orders/{id}/additional-repairs/refuse` | Recusa o reparo (mantém o escopo) | Cliente (dono), Admin |
+| `POST` | `/api/service-orders/{id}/finish` | Finaliza a execução (baixa do estoque, e-mail de retirada) | Admin, Mecânico |
+| `POST` | `/api/service-orders/{id}/deliver` | Registra a entrega | Admin |
+| `POST` | `/api/service-orders/{id}/cancel` | Cancela até a finalização (libera a reserva) | Admin |
+| `GET` | `/api/service-orders/metrics/execution-time` | Tempo médio de execução, geral e por serviço (`from`, `to`) | Admin |
+| `GET` | `/api/public/service-orders/{id}?document=CPF/CNPJ` | Acompanhamento sem login (20 req/min por IP) | Público |
+
+Status da OS: `RECEBIDA` → `EM_DIAGNOSTICO` → `AGUARDANDO_APROVACAO` → `EM_EXECUCAO` → `FINALIZADA` → `ENTREGUE`, mais `CANCELADA`
+(orçamento rejeitado, 48 h sem resposta ou desistência). Justificativa em [`docs/ddd/linguagem-ubiqua.md`](docs/ddd/linguagem-ubiqua.md).
+O prazo de 48 h é tratado pelo comando `php artisan service-orders:expire-approvals`, agendado a cada 15 minutos
+(em produção, rode `php artisan schedule:work` ou um cron com `schedule:run`).
+
 ## Banco de dados: por que PostgreSQL
 Domínio transacional com reserva/baixa de estoque concorrente → ACID, `SELECT ... FOR UPDATE`,
 CHECK constraints e integridade referencial. Decisão completa: [ADR 0001](docs/adr/0001-banco-de-dados-postgresql.md).
@@ -154,7 +208,7 @@ curl -X POST http://localhost:8080/api/auth/login \
   -d '{"email":"admin@oficina.local","password":"admin-local-123"}'
 # use o token retornado: Authorization: Bearer <token>
 ```
-Endpoints de consulta do cliente (acompanhamento da OS) _(definir estratégia: código da OS + documento)_.
+O cliente acompanha a OS logado (usuário com perfil Cliente, só as próprias OS) ou sem login, pelo número da OS + CPF/CNPJ em `GET /api/public/service-orders/{id}?document=...`.
 
 ## Estrutura de diretórios
 ```
