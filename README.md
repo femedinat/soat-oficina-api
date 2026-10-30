@@ -1,6 +1,6 @@
 # 🔧 Oficina API — Sistema Integrado de Atendimento e Execução de Serviços
 
-> Tech Challenge — **SOAT (Software Architecture) · Fase 1** · Grupo `XX`
+> Tech Challenge — **SOAT (Software Architecture) · Fase 1**
 
 ![CI](https://github.com/femedinat/soat-oficina-api/actions/workflows/ci.yml/badge.svg)
 
