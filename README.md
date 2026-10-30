@@ -2,7 +2,7 @@
 
 > Tech Challenge — **SOAT (Software Architecture) · Fase 1** · Grupo `XX`
 
-![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/femedinat/soat-oficina-api/actions/workflows/ci.yml/badge.svg)
 
 ## Objetivo
 MVP do back-end de uma oficina mecânica de médio porte: gestão de **ordens de serviço**, **clientes**,
@@ -44,7 +44,7 @@ sem dependência do Laravel. Detalhes em [docs/ddd](docs/ddd/README.md).
 
 ### Opção 1 — Linux, macOS ou Windows (WSL2) com `make`
 ```bash
-git clone https://github.com/OWNER/REPO.git && cd soat-oficina-api
+git clone https://github.com/femedinat/soat-oficina-api.git && cd soat-oficina-api
 make setup      # copia .env, sobe containers, instala deps, gera chaves, migra e popula o banco
 ```
 API: http://localhost:8080 · `make help` lista todos os comandos disponíveis.
@@ -200,7 +200,15 @@ CHECK constraints e integridade referencial. Decisão completa: [ADR 0001](docs/
 ## Autenticação e usuários de demonstração
 | Perfil | E-mail | Senha |
 |---|---|---|
-| Administrador | `admin@oficina.local` | `admin-local-123` (configurada via `ADMIN_SEED_PASSWORD` no `.env`) |
+| Administrador | `admin@oficina.local` | `admin-local-123` |
+| Mecânico | `mecanico@oficina.local` | `admin-local-123` |
+| Cliente (CPF `529.982.247-25`) | `cliente@oficina.local` | `admin-local-123` |
+
+Criados por `php artisan db:seed` só fora de produção; a senha dos três vem de `ADMIN_SEED_PASSWORD` no `.env`.
+O seeder também cadastra duas peças (`OLEO-5W30`, `FILTRO-OLEO`) e dois serviços (`TROCA-OLEO`, com peças padrão, e `ALINHAMENTO`)
+para demonstrar o fluxo da OS sem cadastro manual, e uma OS do cliente demo (Gol placa `BRA2E19`, troca de óleo com
+óleo e filtro) já com orçamento enviado, em **Aguardando aprovação**. Como o prazo de aprovação é de 48h, rode
+`php artisan migrate:fresh --seed` de novo se ela já tiver sido cancelada por expiração.
 
 ```bash
 curl -X POST http://localhost:8080/api/auth/login \
@@ -231,7 +239,7 @@ O cliente acompanha a OS logado (usuário com perfil Cliente, só as próprias O
 ## Análise de vulnerabilidades
 Executada em todo PR pelo job **Análise de vulnerabilidades** (Trivy + `composer audit`).
 O relatório fica disponível como artefato `security-report` na execução do workflow.
-_Evidência da versão entregue: `docs/security/` (anexar)._
+Evidência da versão entregue: [`docs/security/`](docs/security/README.md).
 
 ## Links da entrega
 - 📐 Documentação DDD (Miro): _link_
@@ -241,4 +249,6 @@ _Evidência da versão entregue: `docs/security/` (anexar)._
 ## Integrantes
 | Nome | RM | Discord |
 |---|---|---|
-| | | |
+| Felipe Medina Tavares | RM378608 | `medinavlr` |
+| Lucas Pereira da Cruz | RM377318 | `.xylucas` |
+| Raniery Amaral Dutra | RM378896 | `ranierydutra` |
