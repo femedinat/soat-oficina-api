@@ -242,9 +242,9 @@ O relatório fica disponível como artefato `security-report` na execução do w
 Evidência da versão entregue: [`docs/security/`](docs/security/README.md).
 
 ## Links da entrega
-- 📐 Documentação DDD (Miro): _link_
-- 🎥 Vídeo: _link_
-- 🏷️ Versão avaliada: branch `main`, tag `v1.0.0-fase1`, commit `_hash_`
+- 📐 Documentação DDD (Miro): https://miro.com/app/board/uXjVHoBO75I=/?share_link_id=397912521593
+- 🎥 Vídeo: https://www.youtube.com/watch?v=_P1rjuHCJGQ
+- 🏷️ Versão avaliada: branch `main`, tag `v1.0.0-fase1` (o hash do commit está no PDF de entrega)
 
 ## Integrantes
 | Nome | RM | Discord |

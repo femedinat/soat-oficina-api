@@ -2,8 +2,8 @@
 
 | Artefato | Arquivo | Link externo |
 |---|---|---|
-| Event Storming (criação da OS, acompanhamento, clientes, veículos, serviços, peças e insumos) | [`event-storming.pdf`](event-storming.pdf) | _link do Miro_ |
-| Diagramas (mapa de contextos, agregados, atores e políticas, C4) | [`diagramas.pdf`](diagramas.pdf) (páginas 2–4 e 10–13 do Event Storming) | _link do Miro_ |
+| Event Storming (criação da OS, acompanhamento, clientes, veículos, serviços, peças e insumos) | [`event-storming.pdf`](event-storming.pdf) | [Miro](https://miro.com/app/board/uXjVHoBO75I=/?share_link_id=397912521593) |
+| Diagramas (mapa de contextos, agregados, atores e políticas, C4) | [`diagramas.pdf`](diagramas.pdf) (páginas 2–4 e 10–13 do Event Storming) | [Miro](https://miro.com/app/board/uXjVHoBO75I=/?share_link_id=397912521593) |
 | Linguagem Ubíqua e glossário | [`linguagem-ubiqua.md`](linguagem-ubiqua.md) | — |
 
 > ⚠️ O board do Miro precisa estar com acesso "qualquer pessoa com o link pode ver".
