@@ -12,7 +12,6 @@
         "php": "^8.3",
         "dedoc/scramble": "^0.13.45",
         "laravel/framework": "^13.17",
-        "laravel/sanctum": "^4.0",
         "laravel/tinker": "^3.0",
         "php-open-source-saver/jwt-auth": "^2.9"
     },

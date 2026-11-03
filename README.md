@@ -1,8 +1,8 @@
 # 🔧 Oficina API — Sistema Integrado de Atendimento e Execução de Serviços
 
-> Tech Challenge — **SOAT (Software Architecture) · Fase 1** · Grupo `XX`
+> Tech Challenge — **SOAT (Software Architecture) · Fase 1**
 
-![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/femedinat/soat-oficina-api/actions/workflows/ci.yml/badge.svg)
 
 ## Objetivo
 MVP do back-end de uma oficina mecânica de médio porte: gestão de **ordens de serviço**, **clientes**,
@@ -10,7 +10,7 @@ MVP do back-end de uma oficina mecânica de médio porte: gestão de **ordens de
 pelo cliente e aprovação de orçamento via API.
 
 ## Solução
-_Resumo da solução (preencher)._
+API RESTful construída em **PHP 8.4** e **Laravel 13** utilizando arquitetura em camadas orientada a **Domain-Driven Design (DDD)**. O sistema separa estritamente as regras de negócio puras (`Domain`) da orquestração de casos de uso (`Application`), persistência transacional em PostgreSQL (`Infrastructure`) e exposição HTTP/OpenAPI (`Interfaces`), garantindo alta testabilidade, validações de domínio ricas (CPF/CNPJ, placas padrão antigo e Mercosul, ciclo de vida de veículos e ordens de serviço) e documentação interativa gerada automaticamente via Scramble.
 
 ## Arquitetura
 Monólito modular em camadas orientado a **Domain-Driven Design**:
@@ -36,27 +36,162 @@ sem dependência do Laravel. Detalhes em [docs/ddd](docs/ddd/README.md).
 | Infra | Docker, Docker Compose, Nginx, GitHub Actions |
 
 ## Pré-requisitos
-- Docker 24+ e Docker Compose v2
-- `make` (Linux/macOS nativo; no Windows use **WSL2**)
-- Nenhum PHP/Composer local é necessário
+- **Docker 24+** e **Docker Compose v2**
+- Opcional: `make` (nativo no Linux/macOS ou via **WSL2** no Windows)
+- Opcional (para rodar fora do container): **PHP 8.4+** (com extensão `pdo_pgsql`) e **Composer 2+** (ex.: Laravel Herd)
 
-## Execução local
+## Execução local (Passo a Passo)
+
+### Opção 1 — Linux, macOS ou Windows (WSL2) com `make`
 ```bash
-git clone https://github.com/OWNER/REPO.git && cd REPO
-make setup      # sobe containers, instala deps, gera chaves, migra e popula o banco
+git clone https://github.com/femedinat/soat-oficina-api.git && cd soat-oficina-api
+make setup      # copia .env, sobe containers, instala deps, gera chaves, migra e popula o banco
 ```
-API: http://localhost:8080 · `make help` lista todos os comandos.
+API: http://localhost:8080 · `make help` lista todos os comandos disponíveis.
 
-## Testes
+### Opção 2 — Windows (PowerShell) com Docker Compose (sem `make`)
+```powershell
+# 1. Criar o arquivo .env a partir do exemplo
+Copy-Item .env.example .env
+
+# 2. Construir e subir os containers (app, web e db)
+docker compose up -d --build
+
+# 3. Instalar dependências, gerar chaves e rodar as migrations
+docker compose exec app composer install --no-interaction
+docker compose exec app php artisan key:generate
+docker compose exec app php artisan jwt:secret --force
+docker compose exec app php artisan migrate --seed
+```
+API disponível em: http://localhost:8080
+
+### Opção 3 — PHP Local (ex.: Laravel Herd) + PostgreSQL no Docker
+Se preferir rodar comandos `php artisan` diretamente no terminal do sistema operacional usando apenas o banco de dados no Docker:
+
+1. Copie o `.env.example` para `.env` e ajuste o `DB_HOST` de `db` para `127.0.0.1`:
+   ```env
+   DB_CONNECTION=pgsql
+   DB_HOST=127.0.0.1
+   DB_PORT=5432
+   DB_DATABASE=oficina
+   DB_USERNAME=oficina
+   DB_PASSWORD=oficina
+   ```
+2. Suba o container do PostgreSQL (ele já cria automaticamente os bancos `oficina` e `oficina_test`):
+   ```powershell
+   docker compose up -d db
+   ```
+3. Instale as dependências, gere as chaves e execute as migrations localmente:
+   ```powershell
+   composer install
+   php artisan key:generate
+   php artisan jwt:secret --force
+   php artisan migrate --seed
+   ```
+4. Suba o servidor local:
+   ```powershell
+   php artisan serve --port=8080
+   ```
+
+## Testes e Qualidade de Código
+
+### Com `make` (Linux/macOS/WSL2)
 ```bash
-make test       # unitários + integração
+make test       # unitários + integração + feature
 make coverage   # com gate de cobertura mínima de 80% sobre src/
-make check      # tudo que o CI roda
+make check      # tudo que o CI roda (lint + stan + coverage + audit)
+```
+
+### Sem `make` (Docker Compose / PowerShell)
+```powershell
+# Rodar suíte de testes
+docker compose exec app php artisan test
+
+# Rodar testes com cobertura mínima de 80% (via PCOV no container)
+docker compose exec app php artisan test --coverage --min=80
+
+# Verificar estilo de código (Laravel Pint) e análise estática (Larastan)
+docker compose exec app ./vendor/bin/pint --test
+docker compose exec app ./vendor/bin/phpstan analyse --memory-limit=1G
+```
+
+### Com PHP Local (com `DB_HOST=127.0.0.1` no `.env` e container `db` rodando)
+```powershell
+php artisan test
+./vendor/bin/pint --test
+./vendor/bin/phpstan analyse --memory-limit=1G
 ```
 
 ## Documentação da API
 - Swagger UI: http://localhost:8080/docs/api
 - OpenAPI JSON: http://localhost:8080/docs/api.json
+
+### Endpoints — Veículos (`/api/vehicles`)
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/vehicles` | Lista veículos (filtros opcionais: `customer_id`, `only_active`) |
+| `POST` | `/api/vehicles` | Cadastra um novo veículo (valida placa antiga/Mercosul e unicidade) |
+| `GET` | `/api/vehicles/{id}` | Consulta veículo por UUID |
+| `GET` | `/api/vehicles/plate/{plate}` | Consulta veículo por placa |
+| `PUT` | `/api/vehicles/{id}` | Atualiza dados cadastrais do veículo |
+| `PATCH` | `/api/vehicles/{id}/mileage` | Registra evolução de quilometragem do veículo |
+| `PATCH` | `/api/vehicles/{id}/transfer` | Transfere propriedade do veículo para outro cliente |
+| `PATCH` | `/api/vehicles/{id}/activate` | Reativa um veículo inativo |
+| `DELETE` | `/api/vehicles/{id}` | Inativa um veículo preservando seu histórico |
+
+### Endpoints — Peças e insumos (`/api/parts`)
+| Método | Rota | Descrição | Perfis |
+|---|---|---|---|
+| `GET` | `/api/parts` | Lista o catálogo com saldo físico, reservado e disponível | Admin, Mecânico |
+| `GET` | `/api/parts/restock` | Itens no estoque mínimo ou abaixo | Admin, Mecânico |
+| `GET` | `/api/parts/{id}` | Consulta peça/insumo | Admin, Mecânico |
+| `POST` | `/api/parts` | Cadastra com estoque inicial | Admin |
+| `PUT` | `/api/parts/{id}` | Atualiza dados | Admin |
+| `PATCH` | `/api/parts/{id}/price` | Altera o preço de venda | Admin |
+| `POST` | `/api/parts/{id}/receipts` | Registra entrada de estoque | Admin |
+| `POST` | `/api/parts/{id}/adjustments` | Ajusta o estoque (inventário) | Admin |
+| `GET` | `/api/parts/{id}/movements` | Extrato de movimentações | Admin |
+| `DELETE` / `PATCH` | `/api/parts/{id}` / `/api/parts/{id}/activate` | Inativa / reativa | Admin |
+
+### Endpoints — Serviços (`/api/services`)
+| Método | Rota | Descrição | Perfis |
+|---|---|---|---|
+| `GET` | `/api/services` | Catálogo (busca `search`, filtro `category`, `include_inactive`) | Todos |
+| `GET` | `/api/services/{id}` | Consulta serviço | Todos |
+| `POST` | `/api/services` | Cadastra (código e nome únicos) | Admin |
+| `PUT` | `/api/services/{id}` | Atualiza nome, descrição e categoria | Admin |
+| `PATCH` | `/api/services/{id}/price` | Altera o preço da mão de obra (OS já orçadas mantêm o preço) | Admin |
+| `PATCH` | `/api/services/{id}/estimated-time` | Ajusta o tempo estimado | Admin |
+| `PUT` | `/api/services/{id}/standard-parts` | Vincula peça padrão (ou atualiza a quantidade) | Admin |
+| `DELETE` | `/api/services/{id}/standard-parts/{partId}` | Desvincula peça padrão | Admin |
+| `DELETE` / `PATCH` | `/api/services/{id}` / `/api/services/{id}/activate` | Inativa / reativa | Admin |
+
+### Endpoints — Ordens de Serviço (`/api/service-orders`)
+| Método | Rota | Descrição | Perfis |
+|---|---|---|---|
+| `POST` | `/api/service-orders` | Abre a OS pelo CPF/CNPJ e placa (cadastra o veículo se for novo) | Admin |
+| `GET` | `/api/service-orders` | Lista (filtros `status`, `customer_id`, `vehicle_id`) | Admin, Mecânico, Cliente (só as dele) |
+| `GET` | `/api/service-orders/{id}` | Detalhe com itens, orçamento e histórico | Admin, Mecânico, Cliente (só as dele) |
+| `POST` | `/api/service-orders/{id}/services` | Adiciona serviço e sugere as peças padrão | Admin, Mecânico |
+| `POST` | `/api/service-orders/{id}/parts` | Adiciona peça/insumo (bloqueia sem estoque) | Admin, Mecânico |
+| `DELETE` | `/api/service-orders/{id}/services/{linha}` e `/parts/{linha}` | Remove item no diagnóstico | Admin, Mecânico |
+| `POST` | `/api/service-orders/{id}/budget/send` | Envia o orçamento (prazo de 48 h, e-mail ao cliente) | Admin, Mecânico |
+| `POST` | `/api/service-orders/{id}/budget/return-to-diagnosis` | Devolve o orçamento ao diagnóstico | Admin, Mecânico |
+| `POST` | `/api/service-orders/{id}/budget/approve` | Aprova (reserva estoque e inicia a execução) | Cliente (dono), Admin |
+| `POST` | `/api/service-orders/{id}/budget/reject` | Rejeita (OS cancelada) | Cliente (dono), Admin |
+| `POST` | `/api/service-orders/{id}/additional-repairs` | Solicita reparo adicional durante a execução | Admin, Mecânico |
+| `POST` | `/api/service-orders/{id}/additional-repairs/authorize` | Autoriza o reparo (reserva as peças extras) | Cliente (dono), Admin |
+| `POST` | `/api/service-orders/{id}/additional-repairs/refuse` | Recusa o reparo (mantém o escopo) | Cliente (dono), Admin |
+| `POST` | `/api/service-orders/{id}/finish` | Finaliza a execução (baixa do estoque, e-mail de retirada) | Admin, Mecânico |
+| `POST` | `/api/service-orders/{id}/deliver` | Registra a entrega | Admin |
+| `POST` | `/api/service-orders/{id}/cancel` | Cancela até a finalização (libera a reserva) | Admin |
+| `GET` | `/api/service-orders/metrics/execution-time` | Tempo médio de execução, geral e por serviço (`from`, `to`) | Admin |
+| `GET` | `/api/public/service-orders/{id}?document=CPF/CNPJ` | Acompanhamento sem login (20 req/min por IP) | Público |
+
+Status da OS: `RECEBIDA` → `EM_DIAGNOSTICO` → `AGUARDANDO_APROVACAO` → `EM_EXECUCAO` → `FINALIZADA` → `ENTREGUE`, mais `CANCELADA`
+(orçamento rejeitado, 48 h sem resposta ou desistência). Justificativa em [`docs/ddd/linguagem-ubiqua.md`](docs/ddd/linguagem-ubiqua.md).
+O prazo de 48 h é tratado pelo comando `php artisan service-orders:expire-approvals`, agendado a cada 15 minutos
+(em produção, rode `php artisan schedule:work` ou um cron com `schedule:run`).
 
 ## Banco de dados: por que PostgreSQL
 Domínio transacional com reserva/baixa de estoque concorrente → ACID, `SELECT ... FOR UPDATE`,
@@ -65,15 +200,23 @@ CHECK constraints e integridade referencial. Decisão completa: [ADR 0001](docs/
 ## Autenticação e usuários de demonstração
 | Perfil | E-mail | Senha |
 |---|---|---|
-| Admin | `admin@oficina.local` | _definida no seeder — apenas ambiente local_ |
+| Administrador | `admin@oficina.local` | `admin-local-123` |
+| Mecânico | `mecanico@oficina.local` | `admin-local-123` |
+| Cliente (CPF `529.982.247-25`) | `cliente@oficina.local` | `admin-local-123` |
+
+Criados por `php artisan db:seed` só fora de produção; a senha dos três vem de `ADMIN_SEED_PASSWORD` no `.env`.
+O seeder também cadastra duas peças (`OLEO-5W30`, `FILTRO-OLEO`) e dois serviços (`TROCA-OLEO`, com peças padrão, e `ALINHAMENTO`)
+para demonstrar o fluxo da OS sem cadastro manual, e uma OS do cliente demo (Gol placa `BRA2E19`, troca de óleo com
+óleo e filtro) já com orçamento enviado, em **Aguardando aprovação**. Como o prazo de aprovação é de 48h, rode
+`php artisan migrate:fresh --seed` de novo se ela já tiver sido cancelada por expiração.
 
 ```bash
 curl -X POST http://localhost:8080/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"admin@oficina.local","password":"..."}'
+  -d '{"email":"admin@oficina.local","password":"admin-local-123"}'
 # use o token retornado: Authorization: Bearer <token>
 ```
-Endpoints de consulta do cliente (acompanhamento da OS) _(definir estratégia: código da OS + documento)_.
+O cliente acompanha a OS logado (usuário com perfil Cliente, só as próprias OS) ou sem login, pelo número da OS + CPF/CNPJ em `GET /api/public/service-orders/{id}?document=...`.
 
 ## Estrutura de diretórios
 ```
@@ -96,14 +239,16 @@ Endpoints de consulta do cliente (acompanhamento da OS) _(definir estratégia: c
 ## Análise de vulnerabilidades
 Executada em todo PR pelo job **Análise de vulnerabilidades** (Trivy + `composer audit`).
 O relatório fica disponível como artefato `security-report` na execução do workflow.
-_Evidência da versão entregue: `docs/security/` (anexar)._
+Evidência da versão entregue: [`docs/security/`](docs/security/README.md).
 
 ## Links da entrega
-- 📐 Documentação DDD (Miro): _link_
-- 🎥 Vídeo: _link_
-- 🏷️ Versão avaliada: branch `main`, tag `v1.0.0-fase1`, commit `_hash_`
+- 📐 Documentação DDD (Miro): https://miro.com/app/board/uXjVHoBO75I=/?share_link_id=397912521593
+- 🎥 Vídeo: https://www.youtube.com/watch?v=_P1rjuHCJGQ
+- 🏷️ Versão avaliada: branch `main`, tag `v1.0.0-fase1` (o hash do commit está no PDF de entrega)
 
 ## Integrantes
 | Nome | RM | Discord |
 |---|---|---|
-| | | |
+| Felipe Medina Tavares | RM378608 | `medinavlr` |
+| Lucas Pereira da Cruz | RM377318 | `.xylucas` |
+| Raniery Amaral Dutra | RM378896 | `ranierydutra` |

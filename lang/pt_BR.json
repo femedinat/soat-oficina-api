@@ -1,0 +1,9 @@
+{
+    "The given data was invalid.": "Os dados informados são inválidos.",
+    "(and :count more error)": "(e mais :count erro)",
+    "(and :count more errors)": "(e mais :count erro)|(e mais :count erros)",
+    "Unauthenticated.": "Não autenticado.",
+    "Server Error": "Erro interno do servidor.",
+    "Not Found": "Recurso não encontrado.",
+    "Too Many Attempts.": "Muitas tentativas."
+}

@@ -6,6 +6,7 @@ namespace Tests\Unit\ServiceOrder;
 
 use Oficina\ServiceOrder\Domain\ServiceOrderStatus as S;
 use Oficina\Shared\Domain\Exception\DomainException;
+use Oficina\Shared\Domain\Exception\InvalidValueException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -29,9 +30,28 @@ final class ServiceOrderStatusTest extends TestCase
         self::assertSame(S::AWAITING_APPROVAL, S::IN_PROGRESS->transitionTo(S::AWAITING_APPROVAL));
     }
 
-    public function test_rejected_budget_finishes_without_execution(): void
+    public function test_rejected_or_expired_budget_cancels_without_execution(): void
     {
-        self::assertSame(S::COMPLETED, S::AWAITING_APPROVAL->transitionTo(S::COMPLETED));
+        self::assertSame(S::CANCELED, S::AWAITING_APPROVAL->transitionTo(S::CANCELED));
+        self::assertFalse(S::AWAITING_APPROVAL->canTransitionTo(S::COMPLETED));
+    }
+
+    public function test_cancel_is_possible_until_services_are_finished(): void
+    {
+        foreach ([S::RECEIVED, S::IN_DIAGNOSIS, S::AWAITING_APPROVAL, S::IN_PROGRESS] as $status) {
+            self::assertTrue($status->canTransitionTo(S::CANCELED), $status->label());
+        }
+
+        self::assertFalse(S::COMPLETED->canTransitionTo(S::CANCELED));
+        self::assertFalse(S::DELIVERED->canTransitionTo(S::CANCELED));
+    }
+
+    public function test_parses_status_from_api_input(): void
+    {
+        self::assertSame(S::CANCELED, S::parse(' cancelada '));
+
+        $this->expectException(InvalidValueException::class);
+        S::parse('PAGA');
     }
 
     #[DataProvider('invalidTransitions')]
@@ -51,6 +71,8 @@ final class ServiceOrderStatusTest extends TestCase
             'entregar sem finalizar' => [S::IN_PROGRESS, S::DELIVERED],
             'reabrir entregue' => [S::DELIVERED, S::RECEIVED],
             'voltar para recebida' => [S::IN_DIAGNOSIS, S::RECEIVED],
+            'finalizar sem aprovação' => [S::AWAITING_APPROVAL, S::COMPLETED],
+            'reabrir cancelada' => [S::CANCELED, S::IN_DIAGNOSIS],
         ];
     }
 
@@ -61,9 +83,9 @@ final class ServiceOrderStatusTest extends TestCase
         }
     }
 
-    public function test_only_delivered_is_final(): void
+    public function test_only_delivered_and_canceled_are_final(): void
     {
         $finals = array_filter(S::cases(), static fn (S $s): bool => $s->isFinal());
-        self::assertSame([S::DELIVERED], array_values($finals));
+        self::assertSame([S::DELIVERED, S::CANCELED], array_values($finals));
     }
 }
